@@ -1,0 +1,189 @@
+{
+  "projectType": "framework",
+  "projectName": "NestJS CRUD",
+  "projectDescription": "A powerful CRUD framework for NestJS applications that auto-generates RESTful API endpoints with advanced querying, filtering, and TypeORM integration",
+  "theme": "aspen",
+  "primaryColor": "#E0234E",
+  "lightColor": "#F06292",
+  "darkColor": "#C2185B",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/overview",
+              "concepts/controllers",
+              "concepts/services",
+              "concepts/requests"
+            ]
+          },
+          {
+            "group": "Controllers",
+            "pages": [
+              "controllers/crud-decorator",
+              "controllers/crud-options",
+              "controllers/route-options",
+              "controllers/overriding-routes",
+              "controllers/validation"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "services/typeorm-service",
+              "services/crud-service",
+              "services/custom-service"
+            ]
+          },
+          {
+            "group": "Request Handling",
+            "pages": [
+              "requests/query-params",
+              "requests/filtering",
+              "requests/sorting",
+              "requests/pagination",
+              "requests/relations",
+              "requests/select-fields"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/global-config",
+              "advanced/authentication",
+              "advanced/serialization",
+              "advanced/swagger",
+              "advanced/soft-delete",
+              "advanced/caching"
+            ]
+          },
+          {
+            "group": "Frontend Usage",
+            "pages": [
+              "frontend/request-builder",
+              "frontend/query-string"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Decorators",
+            "pages": [
+              "api/decorators/crud",
+              "api/decorators/crud-auth",
+              "api/decorators/override",
+              "api/decorators/parsed-request",
+              "api/decorators/parsed-body",
+              "api/decorators/feature-action"
+            ]
+          },
+          {
+            "group": "Interfaces",
+            "pages": [
+              "api/interfaces/crud-options",
+              "api/interfaces/route-options",
+              "api/interfaces/query-options",
+              "api/interfaces/model-options",
+              "api/interfaces/params-options"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "api/services/crud-service",
+              "api/services/typeorm-crud-service"
+            ]
+          },
+          {
+            "group": "Request Builder",
+            "pages": [
+              "api/request-builder/overview",
+              "api/request-builder/methods",
+              "api/request-builder/operators"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Packages",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "packages/overview"
+            ]
+          },
+          {
+            "group": "@nestjsx/crud",
+            "pages": [
+              "packages/crud/overview",
+              "packages/crud/installation"
+            ]
+          },
+          {
+            "group": "@nestjsx/crud-typeorm",
+            "pages": [
+              "packages/crud-typeorm/overview",
+              "packages/crud-typeorm/installation"
+            ]
+          },
+          {
+            "group": "@nestjsx/crud-request",
+            "pages": [
+              "packages/crud-request/overview",
+              "packages/crud-request/installation"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Auto-generated CRUD endpoints with @Crud() decorator",
+    "Advanced query parsing with filtering, pagination, sorting, and relations",
+    "TypeORM integration with TypeOrmCrudService",
+    "Request query builder for frontend usage",
+    "Swagger/OpenAPI documentation generation",
+    "Route customization and override capabilities",
+    "Built-in validation with class-validator",
+    "Soft delete support",
+    "Authentication and authorization hooks",
+    "Response serialization control"
+  ],
+  "publicApiSurface": [
+    "@Crud() - Main decorator for generating CRUD endpoints",
+    "@CrudAuth() - Authentication decorator",
+    "@Override() - Route override decorator",
+    "@ParsedRequest() - Access parsed request parameters",
+    "@ParsedBody() - Access parsed request body",
+    "TypeOrmCrudService - Base service class for TypeORM",
+    "CrudService - Abstract base service class",
+    "RequestQueryBuilder - Frontend query builder",
+    "RequestQueryParser - Backend query parser",
+    "CrudOptions - Configuration interface",
+    "QueryOptions - Query configuration interface",
+    "RoutesOptions - Route configuration interface",
+    "getMany() - Get multiple resources",
+    "getOne() - Get single resource",
+    "createOne() - Create single resource",
+    "createMany() - Create multiple resources",
+    "updateOne() - Update single resource",
+    "replaceOne() - Replace single resource",
+    "deleteOne() - Delete single resource",
+    "recoverOne() - Recover soft-deleted resource"
+  ]
+}
