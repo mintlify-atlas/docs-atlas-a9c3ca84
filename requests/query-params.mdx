@@ -1,0 +1,211 @@
+---
+title: Query Parameters
+description: Learn how to use query parameters to control your API requests in NestJS CRUD
+---
+
+Query parameters allow you to customize API requests to fetch exactly the data you need. The NestJS CRUD framework supports a rich set of query parameters for filtering, sorting, pagination, and more.
+
+## Overview
+
+All query parameters are parsed from the URL query string and can be combined to create powerful, flexible API requests.
+
+## Available Parameters
+
+The framework supports the following query parameter types:
+
+| Parameter | Aliases | Description | Example |
+|-----------|---------|-------------|----------|
+| `fields` | `select` | Select specific fields to return | `?fields=id,name,email` |
+| `filter` | - | Filter results by conditions | `?filter=name||eq||John` |
+| `or` | - | Filter with OR conditions | `?or=age||gt||18` |
+| `join` | - | Join relations | `?join=profile` |
+| `sort` | - | Sort results | `?sort=name,ASC` |
+| `limit` | `per_page` | Limit number of results | `?limit=10` |
+| `offset` | - | Skip number of results | `?offset=20` |
+| `page` | - | Page number (alternative to offset) | `?page=2` |
+| `cache` | - | Cache results (in seconds) | `?cache=300` |
+| `s` | `search` | Advanced JSON search | `?s={"name":"John"}` |
+
+<Note>
+  Parameter names can be customized in the framework configuration, but the default names are shown above.
+</Note>
+
+## Delimiters
+
+The framework uses two types of delimiters:
+
+- **Field delimiter** (`||`): Separates parts of a filter, join, or sort parameter
+- **String delimiter** (`,`): Separates multiple values within a parameter
+
+### Examples
+
+```bash
+# Filter delimiter
+/users?filter=name||eq||John
+
+# String delimiter for multiple fields
+/users?fields=id,name,email
+
+# String delimiter for multiple values in filter
+/users?filter=status||in||active,pending
+```
+
+## Basic Usage
+
+### Simple Request
+
+Fetch users with only specific fields:
+
+```bash
+GET /users?fields=id,name,email
+```
+
+### Multiple Parameters
+
+Combine multiple query parameters:
+
+```bash
+GET /users?fields=id,name&filter=isActive||eq||true&sort=name,ASC&limit=10
+```
+
+### Array Parameters
+
+Some parameters accept multiple values using arrays:
+
+```bash
+# Multiple filters
+GET /users?filter=name||eq||John&filter=age||gt||18
+
+# Multiple joins
+GET /users?join=profile&join=posts
+
+# Multiple sorts
+GET /users?sort=name,ASC&sort=createdAt,DESC
+```
+
+## Value Parsing
+
+The framework automatically parses values to the appropriate type:
+
+### Numbers
+
+```bash
+# Parsed as number: 42
+/users?filter=age||eq||42
+```
+
+### Booleans
+
+```bash
+# Parsed as boolean: true
+/users?filter=isActive||eq||true
+
+# Parsed as boolean: false
+/users?filter=isDeleted||eq||false
+```
+
+### Dates
+
+```bash
+# Parsed as Date object
+/users?filter=createdAt||gt||2024-01-01T00:00:00.000Z
+```
+
+### Strings
+
+```bash
+# Remains as string
+/users?filter=name||eq||John
+```
+
+### Arrays
+
+```bash
+# Parsed as array: [1, 2, 3]
+/users?filter=id||in||1,2,3
+```
+
+<Warning>
+  Large numbers that exceed JavaScript's `Number.MAX_SAFE_INTEGER` are kept as strings to prevent data loss.
+</Warning>
+
+## URL Encoding
+
+When using special characters in query parameters, make sure to properly URL-encode them:
+
+```javascript
+// JavaScript example
+const queryString = new URLSearchParams({
+  filter: 'name||eq||John Doe',
+  fields: 'id,name,email'
+}).toString();
+
+// Result: filter=name%7C%7Ceq%7C%7CJohn+Doe&fields=id%2Cname%2Cemail
+```
+
+## Advanced Search Parameter
+
+The `s` parameter accepts JSON for complex queries:
+
+```bash
+# JSON search
+GET /users?s={"name":"John","age":{"$gte":18}}
+
+# With OR conditions
+GET /users?s={"$or":[{"name":"John"},{"name":"Jane"}]}
+```
+
+<Tip>
+  When using the `s` (search) parameter, the `filter` and `or` parameters are ignored.
+</Tip>
+
+## Best Practices
+
+1. **Use field selection**: Always request only the fields you need to reduce payload size
+2. **Implement pagination**: Use `limit` and `offset` or `page` for large datasets
+3. **Encode URLs**: Always URL-encode query parameters when using special characters
+4. **Combine parameters**: Chain multiple parameters for precise data fetching
+5. **Use appropriate filters**: Choose the right comparison operator for your use case
+
+## Example Requests
+
+### Get Active Users with Profiles
+
+```bash
+GET /users?filter=isActive||eq||true&join=profile&fields=id,name,email
+```
+
+### Search Users by Name or Email
+
+```bash
+GET /users?or=name||cont||john&or=email||cont||john
+```
+
+### Paginated Results with Sorting
+
+```bash
+GET /users?limit=20&page=1&sort=createdAt,DESC
+```
+
+### Complex Query with Multiple Conditions
+
+```bash
+GET /users?filter=age||gte||18&filter=isActive||eq||true&join=profile&join=posts&fields=id,name&limit=10&sort=name,ASC
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Filtering" icon="filter" href="./filtering">
+    Learn about all available filter operators
+  </Card>
+  <Card title="Sorting" icon="arrow-down-a-z" href="./sorting">
+    Understand sorting and ordering results
+  </Card>
+  <Card title="Pagination" icon="list-ol" href="./pagination">
+    Implement pagination in your requests
+  </Card>
+  <Card title="Relations" icon="link" href="./relations">
+    Work with related entities using joins
+  </Card>
+</CardGroup>

@@ -1,0 +1,266 @@
+---
+title: '@Override'
+description: 'Method decorator to override auto-generated CRUD routes with custom implementations'
+---
+
+## Overview
+
+The `@Override` decorator is a method decorator that allows you to replace the auto-generated CRUD routes with your own custom implementations. This is useful when you need to add custom business logic, validation, or modify the default behavior of a CRUD operation.
+
+## Signature
+
+```typescript
+export const Override = (name?: BaseRouteName) => (
+  target,
+  key,
+  descriptor: PropertyDescriptor,
+) => PropertyDescriptor
+```
+
+## Parameters
+
+<ParamField path="name" type="BaseRouteName">
+  The name of the base route to override. If not provided, the decorator infers the route name from the method name by appending `Base`.
+  
+  **Possible values:**
+  - `getManyBase` - Override the get many route
+  - `getOneBase` - Override the get one route
+  - `createOneBase` - Override the create one route
+  - `createManyBase` - Override the create many route
+  - `updateOneBase` - Override the update one route
+  - `replaceOneBase` - Override the replace one route
+  - `deleteOneBase` - Override the delete one route
+  - `recoverOneBase` - Override the recover one route
+</ParamField>
+
+## Usage
+
+### Implicit Route Name
+
+When you don't specify a route name, the decorator automatically infers it from your method name:
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud, Override, ParsedRequest, CrudRequest } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UserService } from './user.service';
+
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+
+  @Override()
+  getMany(@ParsedRequest() req: CrudRequest) {
+    // Custom implementation for getManyBase
+    return { custom: 'response', data: [] };
+  }
+}
+```
+
+The method name `getMany` automatically maps to overriding `getManyBase`.
+
+### Explicit Route Name
+
+You can explicitly specify which route to override:
+
+```typescript
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+
+  @Override('createManyBase')
+  createBulk(
+    @ParsedBody() dto: CreateManyDto<User>,
+    @ParsedRequest() req: CrudRequest
+  ) {
+    // Custom implementation for bulk create
+    console.log('Creating multiple users:', dto.bulk.length);
+    return this.service.createMany(req, dto);
+  }
+}
+```
+
+### Adding Business Logic
+
+```typescript
+import { CrudController } from '@nestjsx/crud';
+
+@Crud({
+  model: { type: Post },
+})
+@Controller('posts')
+export class PostController implements CrudController<Post> {
+  constructor(public service: PostService) {}
+
+  get base(): CrudController<Post> {
+    return this;
+  }
+
+  @Override()
+  async createOne(
+    @ParsedRequest() req: CrudRequest,
+    @ParsedBody() dto: Post
+  ) {
+    // Add custom business logic
+    if (dto.content.includes('spam')) {
+      throw new BadRequestException('Spam content detected');
+    }
+
+    // Generate slug from title
+    dto.slug = dto.title.toLowerCase().replace(/\s+/g, '-');
+
+    // Call the base implementation
+    return this.base.createOneBase(req, dto);
+  }
+}
+```
+
+### Modifying Response
+
+```typescript
+@Crud({
+  model: { type: Product },
+})
+@Controller('products')
+export class ProductController {
+  constructor(public service: ProductService) {}
+
+  @Override('getOneBase')
+  async getProduct(
+    @Param('id') id: string,
+    @ParsedRequest() req: CrudRequest
+  ) {
+    const product = await this.service.findOne(id);
+    
+    // Add computed fields
+    return {
+      ...product,
+      discountedPrice: product.price * 0.9,
+      inStock: product.quantity > 0,
+    };
+  }
+}
+```
+
+### Using with Authentication
+
+```typescript
+@Crud({
+  model: { type: Document },
+})
+@CrudAuth({
+  property: 'user',
+  filter: (user) => ({ userId: user.id }),
+})
+@Controller('documents')
+export class DocumentController implements CrudController<Document> {
+  constructor(public service: DocumentService) {}
+
+  get base(): CrudController<Document> {
+    return this;
+  }
+
+  @Override()
+  async deleteOne(
+    @ParsedRequest() req: CrudRequest,
+    @Request() request
+  ) {
+    const user = request.user;
+    const documentId = req.parsed.paramsFilter[0].value;
+    
+    // Check if user has permission to delete
+    const document = await this.service.findOne(documentId);
+    if (document.userId !== user.id && !user.isAdmin) {
+      throw new ForbiddenException('You cannot delete this document');
+    }
+
+    return this.base.deleteOneBase(req);
+  }
+}
+```
+
+### Complete Integration Test Example
+
+From the source tests:
+
+```typescript packages/crud/test/crud.decorator.override.spec.ts:25-56
+@Crud({
+  model: { type: TestModel },
+  params: {
+    enumField: {
+      field: 'enum_field',
+      type: 'string',
+      enum: Field,
+    },
+    disabledField: {
+      field: 'disabled_field',
+      type: 'number',
+      disabled: true,
+    },
+  },
+})
+@Controller('test')
+class TestController implements CrudController<TestModel> {
+  constructor(public service: TestService<TestModel>) {}
+
+  get base(): CrudController<TestModel> {
+    return this;
+  }
+
+  @Override()
+  getMany(@ParsedRequest() req: CrudRequest) {
+    return { foo: 'bar' };
+  }
+
+  @Override('createManyBase')
+  createBulk(@ParsedBody() dto: CreateManyDto<TestModel>, @ParsedRequest() req: CrudRequest) {
+    return this.base.createManyBase(req, dto);
+  }
+}
+```
+
+## Implementation Details
+
+The decorator stores metadata about the override:
+
+```typescript packages/crud/src/decorators/override.decorator.ts:4-11
+export const Override = (name?: BaseRouteName) => (
+  target,
+  key,
+  descriptor: PropertyDescriptor,
+) => {
+  Reflect.defineMetadata(OVERRIDE_METHOD_METADATA, name || `${key}Base`, target[key]);
+  return descriptor;
+};
+```
+
+If no `name` is provided, the decorator uses the method name and appends `Base` to determine which route to override.
+
+<Note>
+  When you override a route, you still have access to the base implementation through the `base` property if you implement the `CrudController` interface. This allows you to add logic before or after the base implementation.
+</Note>
+
+<Warning>
+  Overridden methods must have the same route path and HTTP method as the base route they're replacing. The framework automatically applies the correct routing metadata.
+</Warning>
+
+## Tips
+
+1. **Use `@ParsedRequest()`** to access the parsed CRUD request with filters, pagination, and joins
+2. **Use `@ParsedBody()`** to access the validated and transformed request body
+3. **Implement `CrudController<T>`** to get access to the base methods via `this.base`
+4. **Validation still applies** - DTOs are validated even in overridden routes
+5. **Swagger documentation** is automatically generated for overridden routes
+
+## See Also
+
+- [@ParsedRequest](/api/decorators/parsed-request) - Access parsed request data
+- [@ParsedBody](/api/decorators/parsed-body) - Access parsed request body
+- [@Crud](/api/decorators/crud) - Main CRUD decorator
+- [Controllers](/concepts/controllers) - Controller concepts and usage

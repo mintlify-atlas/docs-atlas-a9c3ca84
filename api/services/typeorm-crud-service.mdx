@@ -1,0 +1,721 @@
+---
+title: TypeOrmCrudService
+description: TypeORM implementation of CRUD operations for NestJS CRUD framework
+---
+
+# TypeOrmCrudService
+
+The `TypeOrmCrudService` is a concrete implementation of the `CrudService` abstract class that provides full CRUD functionality using TypeORM. This is the primary service class you'll use with TypeORM repositories.
+
+## Overview
+
+This service provides:
+- Complete CRUD operations implementation
+- Advanced query building with TypeORM
+- Automatic relation handling
+- Search and filter support
+- Pagination and sorting
+- SQL injection protection
+- Soft delete support
+
+## Constructor
+
+```typescript
+constructor(protected repo: Repository<T>)
+```
+
+<ParamField path="repo" type="Repository<T>" required>
+  TypeORM repository instance for the entity
+</ParamField>
+
+**Example:**
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { User } from './user.entity';
+
+@Injectable()
+export class UserService extends TypeOrmCrudService<User> {
+  constructor(@InjectRepository(User) repo) {
+    super(repo);
+  }
+}
+```
+
+## CRUD Methods
+
+### getMany()
+
+Retrieves multiple entities with advanced query support.
+
+```typescript
+async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request containing:
+  - `parsed`: Parsed query parameters (filter, sort, pagination, joins)
+  - `options`: CRUD configuration options
+</ParamField>
+
+<ResponseField name="return" type="Promise<GetManyDefaultResponse<T> | T[]>">
+  Returns:
+  - Paginated response with metadata if pagination is applied
+  - Simple array of entities otherwise
+</ResponseField>
+
+**Features:**
+- Automatic query builder creation
+- Field selection
+- Filtering and search
+- Relation joins
+- Sorting
+- Pagination
+- Caching support
+
+**Example:**
+```typescript
+// Controller endpoint
+@Get()
+async getUsers(@ParsedRequest() req: CrudRequest) {
+  return this.service.getMany(req);
+}
+
+// Request: GET /users?filter=age||$gt||18&sort=name,ASC&limit=10&page=1
+// Returns:
+// {
+//   data: [...users...],
+//   count: 10,
+//   total: 156,
+//   page: 1,
+//   pageCount: 16
+// }
+```
+
+---
+
+### getOne()
+
+Retrieves a single entity by ID or search criteria.
+
+```typescript
+async getOne(req: CrudRequest): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  Request object with search criteria in `parsed.search`
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  The found entity or throws `NotFoundException`
+</ResponseField>
+
+**Example:**
+```typescript
+@Get(':id')
+async getUser(@ParsedRequest() req: CrudRequest) {
+  return this.service.getOne(req);
+}
+
+// Request: GET /users/123?join=profile&join=posts
+// Returns the user with profile and posts relations loaded
+```
+
+---
+
+### createOne()
+
+Creates a single entity.
+
+```typescript
+async createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  Request object with configuration options
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  Entity data to create
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  The created entity (shallow or fully loaded based on `returnShallow` option)
+</ResponseField>
+
+**Example:**
+```typescript
+@Post()
+async createUser(
+  @ParsedRequest() req: CrudRequest,
+  @ParsedBody() dto: CreateUserDto,
+) {
+  return this.service.createOne(req, dto);
+}
+
+// Request: POST /users
+// Body: { "name": "John", "email": "john@example.com" }
+```
+
+<Note>
+  The service automatically applies parameter filters and auth persist data from the request.
+</Note>
+
+---
+
+### createMany()
+
+Creates multiple entities in bulk.
+
+```typescript
+async createMany(req: CrudRequest, dto: CreateManyDto<T | Partial<T>>): Promise<T[]>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  Request object
+</ParamField>
+
+<ParamField path="dto" type="CreateManyDto<T | Partial<T>>" required>
+  Object with `bulk` array containing entities to create
+</ParamField>
+
+<ResponseField name="return" type="Promise<T[]>">
+  Array of created entities
+</ResponseField>
+
+**Example:**
+```typescript
+@Post('bulk')
+async createUsers(
+  @ParsedRequest() req: CrudRequest,
+  @ParsedBody() dto: CreateManyDto<User>,
+) {
+  return this.service.createMany(req, dto);
+}
+
+// Request: POST /users/bulk
+// Body: {
+//   "bulk": [
+//     { "name": "John", "email": "john@example.com" },
+//     { "name": "Jane", "email": "jane@example.com" }
+//   ]
+// }
+```
+
+<Note>
+  Entities are saved in chunks of 50 for optimal performance.
+</Note>
+
+---
+
+### updateOne()
+
+Partially updates an existing entity.
+
+```typescript
+async updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  Request object with entity identifier
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  Partial entity data to update
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  The updated entity
+</ResponseField>
+
+**Example:**
+```typescript
+@Patch(':id')
+async updateUser(
+  @ParsedRequest() req: CrudRequest,
+  @ParsedBody() dto: UpdateUserDto,
+) {
+  return this.service.updateOne(req, dto);
+}
+
+// Request: PATCH /users/123
+// Body: { "name": "John Updated" }
+// Only updates the name field, other fields remain unchanged
+```
+
+**Behavior:**
+- Fetches the existing entity
+- Merges with new data
+- Applies parameter filters if `allowParamsOverride` is false
+- Returns shallow or fully loaded entity based on `returnShallow` option
+
+---
+
+### replaceOne()
+
+Fully replaces an entity.
+
+```typescript
+async replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  Request object with entity identifier
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  Complete entity data
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  The replaced entity
+</ResponseField>
+
+**Example:**
+```typescript
+@Put(':id')
+async replaceUser(
+  @ParsedRequest() req: CrudRequest,
+  @ParsedBody() dto: User,
+) {
+  return this.service.replaceOne(req, dto);
+}
+
+// Request: PUT /users/123
+// Body: { "name": "John", "email": "new@example.com", "age": 30 }
+// Replaces the entire entity with new data
+```
+
+<Note>
+  If the entity doesn't exist, it will be created with the provided data.
+</Note>
+
+---
+
+### deleteOne()
+
+Deletes a single entity (soft or hard delete).
+
+```typescript
+async deleteOne(req: CrudRequest): Promise<void | T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  Request object with entity identifier
+</ParamField>
+
+<ResponseField name="return" type="Promise<void | T>">
+  Void or the deleted entity if `returnDeleted` option is enabled
+</ResponseField>
+
+**Example:**
+```typescript
+@Delete(':id')
+async deleteUser(@ParsedRequest() req: CrudRequest) {
+  return this.service.deleteOne(req);
+}
+
+// Request: DELETE /users/123
+```
+
+**Behavior:**
+- Uses soft delete if `options.query.softDelete` is true
+- Uses hard delete (permanent) otherwise
+- Can return deleted entity based on configuration
+
+---
+
+### recoverOne()
+
+Recovers a soft-deleted entity.
+
+```typescript
+async recoverOne(req: CrudRequest): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  Request object with entity identifier
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  The recovered entity
+</ResponseField>
+
+**Example:**
+```typescript
+@Patch(':id/recover')
+async recoverUser(@ParsedRequest() req: CrudRequest) {
+  return this.service.recoverOne(req);
+}
+
+// Request: PATCH /users/123/recover
+// Restores a soft-deleted user
+```
+
+<Note>
+  Only works with entities that have a delete date column (e.g., `@DeleteDateColumn()`).
+</Note>
+
+## Query Builder Methods
+
+### createBuilder()
+
+Creates a TypeORM SelectQueryBuilder with all query parameters applied.
+
+```typescript
+async createBuilder(
+  parsed: ParsedRequestParams,
+  options: CrudRequestOptions,
+  many = true,
+  withDeleted = false,
+): Promise<SelectQueryBuilder<T>>
+```
+
+<ParamField path="parsed" type="ParsedRequestParams" required>
+  Parsed request parameters (filters, joins, sort, pagination)
+</ParamField>
+
+<ParamField path="options" type="CrudRequestOptions" required>
+  CRUD configuration options
+</ParamField>
+
+<ParamField path="many" type="boolean" default="true">
+  Whether to apply pagination and sorting (true for getMany, false for getOne)
+</ParamField>
+
+<ParamField path="withDeleted" type="boolean" default="false">
+  Include soft-deleted entities
+</ParamField>
+
+<ResponseField name="return" type="Promise<SelectQueryBuilder<T>>">
+  Configured TypeORM query builder
+</ResponseField>
+
+**Example:**
+```typescript
+class CustomUserService extends TypeOrmCrudService<User> {
+  async getActiveUsers(req: CrudRequest): Promise<User[]> {
+    const builder = await this.createBuilder(req.parsed, req.options);
+    builder.andWhere('user.isActive = :active', { active: true });
+    return builder.getMany();
+  }
+}
+```
+
+---
+
+### doGetMany()
+
+Executes the query builder and returns results with or without pagination.
+
+```typescript
+protected async doGetMany(
+  builder: SelectQueryBuilder<T>,
+  query: ParsedRequestParams,
+  options: CrudRequestOptions,
+): Promise<GetManyDefaultResponse<T> | T[]>
+```
+
+<ParamField path="builder" type="SelectQueryBuilder<T>" required>
+  Configured query builder
+</ParamField>
+
+<ParamField path="query" type="ParsedRequestParams" required>
+  Parsed query parameters
+</ParamField>
+
+<ParamField path="options" type="CrudRequestOptions" required>
+  CRUD options
+</ParamField>
+
+<ResponseField name="return" type="Promise<GetManyDefaultResponse<T> | T[]>">
+  Paginated response or array of entities
+</ResponseField>
+
+**Example:**
+```typescript
+class CustomUserService extends TypeOrmCrudService<User> {
+  async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<User> | User[]> {
+    const { parsed, options } = req;
+    const builder = await this.createBuilder(parsed, options);
+    
+    // Add custom filtering
+    builder.andWhere('user.verified = :verified', { verified: true });
+    
+    return this.doGetMany(builder, parsed, options);
+  }
+}
+```
+
+## Helper Methods
+
+### getParamFilters()
+
+Extracts parameter filters from parsed request.
+
+```typescript
+getParamFilters(parsed: CrudRequest['parsed']): ObjectLiteral
+```
+
+<ParamField path="parsed" type="CrudRequest['parsed']" required>
+  Parsed request data
+</ParamField>
+
+<ResponseField name="return" type="ObjectLiteral">
+  Object with filter field-value pairs
+</ResponseField>
+
+**Example:**
+```typescript
+const filters = this.getParamFilters(req.parsed);
+// Returns: { organizationId: 123 } for route /organizations/:organizationId/users
+```
+
+## Repository Accessors
+
+The service provides direct access to TypeORM repository methods:
+
+### findOne
+
+```typescript
+public get findOne(): Repository<T>['findOne']
+```
+
+Access TypeORM's `findOne` method directly.
+
+**Example:**
+```typescript
+const user = await this.service.findOne({ where: { email: 'test@example.com' } });
+```
+
+---
+
+### find
+
+```typescript
+public get find(): Repository<T>['find']
+```
+
+Access TypeORM's `find` method directly.
+
+**Example:**
+```typescript
+const users = await this.service.find({ where: { isActive: true } });
+```
+
+---
+
+### count
+
+```typescript
+public get count(): Repository<T>['count']
+```
+
+Access TypeORM's `count` method directly.
+
+**Example:**
+```typescript
+const totalUsers = await this.service.count({ where: { role: 'admin' } });
+```
+
+## Advanced Features
+
+### SQL Injection Protection
+
+The service includes built-in SQL injection protection:
+
+```typescript
+protected sqlInjectionRegEx: RegExp[] = [
+  /(%27)|(\')|(--)|((%23)|(#)/gi,
+  /((%3D)|(=))[^\n]*((%27)|(\')|(--)|((%3B)|(;))/gi,
+  /w*((%27)|(\''))((%6F)|o|(%4F))((%72)|r|(%52))/gi,
+  /((%27)|(\''))union/gi,
+]
+```
+
+All field names in queries are automatically checked against these patterns.
+
+### Soft Delete Support
+
+If your entity has a `@DeleteDateColumn()`, the service automatically:
+- Filters out soft-deleted records by default
+- Supports `includeDeleted` query parameter
+- Provides `deleteOne()` for soft deletion
+- Provides `recoverOne()` for recovery
+
+**Example Entity:**
+```typescript
+import { Entity, Column, DeleteDateColumn } from 'typeorm';
+
+@Entity()
+export class User {
+  @Column()
+  name: string;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
+}
+```
+
+**Usage:**
+```typescript
+// Soft delete
+await this.service.deleteOne(req); // Sets deletedAt
+
+// Recover
+await this.service.recoverOne(req); // Clears deletedAt
+
+// Include deleted in query
+// GET /users?includeDeleted=1
+```
+
+### Relation Handling
+
+The service automatically handles entity relations:
+
+```typescript
+// Request: GET /users?join=profile&join=posts.comments
+// Automatically loads nested relations
+```
+
+**Relation Configuration:**
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    join: {
+      profile: { eager: true },
+      posts: { allow: ['title', 'content'] },
+      'posts.comments': {},
+    },
+  },
+})
+export class UserController {
+  constructor(public service: UserService) {}
+}
+```
+
+### Caching
+
+Enable query result caching:
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    cache: 2000, // Cache for 2 seconds
+  },
+})
+export class UserController {
+  constructor(public service: UserService) {}
+}
+
+// Disable cache per request
+// GET /users?cache=0
+```
+
+## Complete Usage Example
+
+```typescript
+// user.entity.ts
+import { Entity, PrimaryGeneratedColumn, Column, DeleteDateColumn } from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @Column()
+  email: string;
+
+  @Column()
+  age: number;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
+}
+
+// user.service.ts
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { User } from './user.entity';
+
+@Injectable()
+export class UserService extends TypeOrmCrudService<User> {
+  constructor(@InjectRepository(User) repo) {
+    super(repo);
+  }
+
+  // Optional: Add custom methods
+  async findByEmail(email: string): Promise<User> {
+    const user = await this.findOne({ where: { email } });
+    if (!user) {
+      this.throwNotFoundException('User');
+    }
+    return user;
+  }
+}
+
+// user.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud, CrudController } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UserService } from './user.service';
+
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+    limit: 10,
+    maxLimit: 100,
+    cache: 2000,
+  },
+  routes: {
+    exclude: [],
+  },
+})
+@Controller('users')
+export class UserController implements CrudController<User> {
+  constructor(public service: UserService) {}
+}
+```
+
+## Query Examples
+
+```bash
+# Get all users with pagination
+GET /users?limit=10&page=1
+
+# Filter users by age
+GET /users?filter=age||$gt||18&filter=age||$lt||65
+
+# Search with multiple conditions
+GET /users?s={"$or":[{"name":"John"},{"email":"john@example.com"}]}
+
+# Sort by multiple fields
+GET /users?sort=age,DESC&sort=name,ASC
+
+# Select specific fields
+GET /users?fields=name,email
+
+# Join relations
+GET /users?join=profile&join=posts
+
+# Include soft-deleted records
+GET /users?includeDeleted=1
+
+# Complex query
+GET /users?filter=age||$gte||18&sort=name,ASC&limit=20&join=profile&fields=name,email
+```
+
+## Related Documentation
+
+- [CrudService](/api/services/crud-service) - Abstract base class
+- [CRUD Controllers](/concepts/controllers)
+- [Query Parameters](/requests/query-params)
+- [Relations](/requests/relations)

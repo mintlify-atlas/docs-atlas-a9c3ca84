@@ -1,0 +1,221 @@
+---
+title: ModelOptions
+description: Configure the entity model for CRUD operations
+---
+
+The `ModelOptions` interface specifies the entity/model class that the CRUD controller will operate on. This is the only required option when configuring a CRUD controller.
+
+## Interface Definition
+
+```typescript
+export interface ModelOptions {
+  type: any;
+}
+```
+
+## Properties
+
+<ParamField path="type" type="any" required>
+  The entity class that represents your data model.
+  
+  This should be a TypeORM entity, Mongoose model, or any other ORM entity class that your service layer can work with.
+  
+  ```typescript
+  model: { type: User }
+  ```
+</ParamField>
+
+## Usage Examples
+
+### Basic TypeORM Entity
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: {
+    type: User,
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+### With TypeORM Entity Definition
+
+```typescript user.entity.ts
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @Column({ unique: true })
+  email: string;
+
+  @Column()
+  password: string;
+
+  @Column({ default: true })
+  isActive: boolean;
+}
+```
+
+```typescript users.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: {
+    type: User, // Reference to the entity class
+  },
+  query: {
+    exclude: ['password'], // Don't expose password field
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+### With Complete CRUD Configuration
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { Hero } from './hero.entity';
+import { HeroesService } from './heroes.service';
+import { CreateHeroDto } from './dto/create-hero.dto';
+import { UpdateHeroDto } from './dto/update-hero.dto';
+
+@Crud({
+  model: {
+    type: Hero, // The entity class
+  },
+  dto: {
+    create: CreateHeroDto,
+    update: UpdateHeroDto,
+  },
+  query: {
+    limit: 25,
+    alwaysPaginate: true,
+    join: {
+      powers: { eager: true },
+    },
+  },
+})
+@Controller('heroes')
+export class HeroesController {
+  constructor(public service: HeroesService) {}
+}
+```
+
+## Entity Requirements
+
+The entity class specified in `model.type` should:
+
+1. Be decorated with ORM decorators (e.g., `@Entity()` for TypeORM)
+2. Have a primary key field (e.g., `@PrimaryGeneratedColumn()` or `@PrimaryColumn()`)
+3. Have columns/properties that map to database fields
+4. Be registered in your ORM module configuration
+
+### TypeORM Entity Example
+
+```typescript
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+
+@Entity('heroes')
+export class Hero {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  name: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @Column({ default: true })
+  isActive: boolean;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+```
+
+### Mongoose Model Example
+
+```typescript
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+
+@Schema()
+export class Hero extends Document {
+  @Prop({ required: true })
+  name: string;
+
+  @Prop()
+  description: string;
+
+  @Prop({ default: true })
+  isActive: boolean;
+
+  @Prop({ default: Date.now })
+  createdAt: Date;
+}
+
+export const HeroSchema = SchemaFactory.createForClass(Hero);
+```
+
+## Notes
+
+<Note>
+  The `model.type` property is the only required field in the entire `CrudOptions` configuration. All other options have sensible defaults.
+</Note>
+
+<Warning>
+  Make sure the entity class is properly registered in your ORM module (e.g., `TypeOrmModule.forFeature([User])` for TypeORM) before using it in a CRUD controller.
+</Warning>
+
+<Expandable title="Why is type 'any'?">
+  The `type` property is typed as `any` to provide flexibility and work with different ORM libraries (TypeORM, Mongoose, Sequelize, etc.). In practice, you'll pass a specific entity class:
+  
+  ```typescript
+  // TypeORM
+  model: { type: User }
+  
+  // Mongoose
+  model: { type: UserModel }
+  
+  // Sequelize
+  model: { type: UserEntity }
+  ```
+  
+  The framework uses TypeScript's structural typing to ensure the entity has the necessary properties at runtime.
+</Expandable>
+
+## Related Configuration
+
+<CardGroup cols={2}>
+  <Card title="CrudOptions" icon="gear" href="/api/interfaces/crud-options">
+    Main CRUD configuration
+  </Card>
+  <Card title="ParamsOptions" icon="hashtag" href="/api/interfaces/params-options">
+    Configure entity parameters
+  </Card>
+</CardGroup>

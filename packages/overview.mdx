@@ -1,0 +1,60 @@
+---
+title: Packages Overview
+description: Overview of all NestJS CRUD framework packages
+---
+
+The NestJS CRUD framework is a modular collection of packages that work together to provide powerful CRUD functionality for RESTful APIs built with NestJS.
+
+## Package Architecture
+
+The framework is split into specialized packages, each serving a specific purpose:
+
+<CardGroup cols={3}>
+  <Card title="@nestjsx/crud" icon="box" href="/packages/crud/overview">
+    Core package providing decorators and controllers
+  </Card>
+  <Card title="@nestjsx/crud-typeorm" icon="database" href="/packages/crud-typeorm/overview">
+    TypeORM integration for database operations
+  </Card>
+  <Card title="@nestjsx/crud-request" icon="arrows-left-right" href="/packages/crud-request/overview">
+    Request query builder and parser
+  </Card>
+</CardGroup>
+
+## How They Work Together
+
+The packages are designed to work together seamlessly:
+
+1. **@nestjsx/crud** - The foundation that provides the `@Crud()` decorator, base services, and controller generation
+2. **@nestjsx/crud-typeorm** - Extends the base service to provide TypeORM-specific CRUD operations
+3. **@nestjsx/crud-request** - Handles query string parsing and provides a query builder for frontend applications
+
+<Note>
+  You can use each package independently or combine them based on your needs. For a complete CRUD solution with TypeORM, you'll typically use all three packages.
+</Note>
+
+## Key Features
+
+Across all packages, you get:
+
+- **Automatic CRUD endpoints** - Generate standard REST endpoints with minimal code
+- **Advanced query capabilities** - Filtering, pagination, sorting, relations, and nested relations
+- **Validation** - Built-in query parameter and DTO validation
+- **Flexibility** - Easy to override and customize default behavior
+- **Type safety** - Full TypeScript support throughout
+- **Swagger integration** - Automatic API documentation generation
+
+## Version Information
+
+All packages are currently at version `5.0.0-alpha.3` and are maintained under the `@nestjsx` namespace.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started with a simple CRUD example
+  </Card>
+  <Card title="Installation" icon="download" href="/packages/crud/installation">
+    Install and configure the packages
+  </Card>
+</CardGroup>

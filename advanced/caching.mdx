@@ -1,0 +1,475 @@
+---
+title: 'Caching'
+description: 'Improve performance with built-in query result caching'
+icon: 'clock-rotate-left'
+---
+
+## Overview
+
+NestJS CRUD provides built-in caching capabilities for query results, helping you improve API performance by reducing database calls. Caching is particularly useful for:
+
+- Frequently accessed data
+- Complex queries with joins
+- Read-heavy applications
+- Reducing database load
+
+## Prerequisites
+
+Caching requires TypeORM's cache configuration. First, configure your TypeORM connection:
+
+```typescript orm.config.ts
+import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+
+export const typeOrmConfig: TypeOrmModuleOptions = {
+  type: 'postgres',
+  host: 'localhost',
+  port: 5432,
+  username: 'root',
+  password: 'root',
+  database: 'myapp',
+  entities: [__dirname + '/**/*.entity{.ts,.js}'],
+  synchronize: false,
+  
+  // Enable caching
+  cache: {
+    duration: 30000, // 30 seconds default cache duration
+  },
+};
+```
+
+<Note>
+TypeORM supports multiple cache providers including in-memory, Redis, and database caching.
+</Note>
+
+## Basic Configuration
+
+Enable caching for specific controllers:
+
+```typescript users.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: { type: User },
+  query: {
+    cache: 2000, // Cache for 2 seconds
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Global Configuration
+
+Set default cache duration globally:
+
+```typescript main.ts
+import { CrudConfigService } from '@nestjsx/crud';
+
+CrudConfigService.load({
+  query: {
+    cache: 5000, // 5 seconds default for all controllers
+  },
+});
+```
+
+## Cache Duration
+
+Specify cache duration in milliseconds:
+
+```typescript
+@Crud({
+  model: { type: Product },
+  query: {
+    cache: 60000, // 1 minute
+  },
+})
+```
+
+### Common Durations
+
+| Duration | Milliseconds | Use Case |
+|----------|--------------|----------|
+| 1 second | `1000` | Rapidly changing data |
+| 5 seconds | `5000` | Frequently updated data |
+| 30 seconds | `30000` | Moderately stable data |
+| 1 minute | `60000` | Stable data |
+| 5 minutes | `300000` | Rarely changing data |
+| 1 hour | `3600000` | Configuration data |
+
+## Disabling Cache
+
+Disable caching for specific controllers:
+
+```typescript
+@Crud({
+  model: { type: Order },
+  query: {
+    cache: false, // No caching
+  },
+})
+```
+
+## Cache Control via Query Parameter
+
+Clients can control caching using the `cache` query parameter:
+
+### Bypass Cache
+
+```bash
+GET /users?cache=0
+```
+
+This forces a fresh database query, bypassing any cached results.
+
+### Use Cache
+
+```bash
+GET /users?cache=1
+```
+
+This uses cached results if available (default behavior).
+
+<Tip>
+The cache query parameter allows clients to refresh stale data when needed.
+</Tip>
+
+## Cache with TypeORM
+
+### In-Memory Caching
+
+Default in-memory cache (development only):
+
+```typescript
+export const typeOrmConfig: TypeOrmModuleOptions = {
+  // ... other options
+  cache: true, // Uses in-memory caching
+};
+```
+
+### Redis Caching
+
+Production-ready caching with Redis:
+
+```bash
+npm install --save cache-manager cache-manager-redis-store
+```
+
+```typescript orm.config.ts
+import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import * as redisStore from 'cache-manager-redis-store';
+
+export const typeOrmConfig: TypeOrmModuleOptions = {
+  type: 'postgres',
+  // ... other options
+  
+  cache: {
+    type: 'redis',
+    options: {
+      host: 'localhost',
+      port: 6379,
+    },
+    duration: 30000, // 30 seconds
+  },
+};
+```
+
+### Database Caching
+
+Use database table for caching:
+
+```typescript orm.config.ts
+export const typeOrmConfig: TypeOrmModuleOptions = {
+  type: 'postgres',
+  // ... other options
+  
+  cache: {
+    type: 'database',
+    tableName: 'query_result_cache',
+    duration: 30000,
+  },
+};
+```
+
+Create the cache table:
+
+```sql
+CREATE TABLE query_result_cache (
+  id SERIAL PRIMARY KEY,
+  identifier VARCHAR(255),
+  time BIGINT NOT NULL,
+  duration INTEGER NOT NULL,
+  query TEXT NOT NULL,
+  result TEXT NOT NULL
+);
+```
+
+## Cache Behavior
+
+### What Gets Cached
+
+The following operations are cached:
+
+- `getMany` - List queries
+- `getOne` - Single entity retrieval
+
+### Cache Keys
+
+Cache keys are automatically generated based on:
+
+- Entity type
+- Query parameters (filters, joins, sort, etc.)
+- Field selection
+- Pagination settings
+
+<Note>
+Different query parameters result in different cache entries.
+</Note>
+
+### Cache Invalidation
+
+Cache is automatically invalidated when:
+
+- Cache duration expires
+- Client requests `?cache=0`
+- You manually clear the cache (see below)
+
+## Manual Cache Control
+
+Clear cache programmatically:
+
+```typescript users.service.ts
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { Repository } from 'typeorm';
+import { User } from './user.entity';
+
+@Injectable()
+export class UsersService extends TypeOrmCrudService<User> {
+  constructor(
+    @InjectRepository(User)
+    private userRepo: Repository<User>
+  ) {
+    super(userRepo);
+  }
+
+  async clearCache() {
+    // Clear query result cache
+    await this.userRepo.manager.connection.queryResultCache.clear();
+  }
+  
+  async clearSpecificCache(identifier: string) {
+    // Clear specific cache entry
+    await this.userRepo.manager.connection.queryResultCache.remove([identifier]);
+  }
+}
+```
+
+## Complete Example
+
+Here's a production-ready caching setup:
+
+### TypeORM Configuration
+
+```typescript orm.config.ts
+import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+
+export const typeOrmConfig: TypeOrmModuleOptions = {
+  type: 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT) || 5432,
+  username: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'root',
+  database: process.env.DB_NAME || 'myapp',
+  entities: [__dirname + '/**/*.entity{.ts,.js}'],
+  synchronize: false,
+  logging: process.env.NODE_ENV === 'development',
+  
+  cache: {
+    type: 'redis',
+    options: {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT) || 6379,
+    },
+    duration: 30000, // 30 seconds default
+  },
+};
+```
+
+### App Module
+
+```typescript app.module.ts
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { typeOrmConfig } from './orm.config';
+import { UsersModule } from './users/users.module';
+import { ProductsModule } from './products/products.module';
+
+@Module({
+  imports: [
+    TypeOrmModule.forRoot(typeOrmConfig),
+    UsersModule,
+    ProductsModule,
+  ],
+})
+export class AppModule {}
+```
+
+### Controller with Caching
+
+```typescript products.controller.ts
+import { Controller } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { Crud } from '@nestjsx/crud';
+import { Product } from './product.entity';
+import { ProductsService } from './products.service';
+
+@Crud({
+  model: { type: Product },
+  query: {
+    cache: 60000, // Cache product queries for 1 minute
+    join: {
+      category: {
+        eager: true,
+      },
+      reviews: {},
+    },
+  },
+})
+@ApiTags('products')
+@Controller('products')
+export class ProductsController {
+  constructor(public service: ProductsService) {}
+}
+```
+
+### Global Configuration
+
+```typescript main.ts
+import { NestFactory } from '@nestjs/core';
+import { CrudConfigService } from '@nestjsx/crud';
+import { AppModule } from './app.module';
+
+CrudConfigService.load({
+  query: {
+    cache: 30000, // 30 seconds default cache
+  },
+});
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+
+bootstrap();
+```
+
+## Performance Considerations
+
+### Cache Hit Ratio
+
+Monitor cache effectiveness:
+
+```typescript
+import { Logger } from '@nestjs/common';
+
+@Injectable()
+export class CacheMonitorService {
+  private logger = new Logger('CacheMonitor');
+  
+  async getCacheStats() {
+    // Implementation depends on cache provider
+    // For Redis:
+    const info = await redisClient.info('stats');
+    this.logger.log(`Cache stats: ${info}`);
+  }
+}
+```
+
+### Memory Usage
+
+<Warning>
+In-memory caching can consume significant memory. Use Redis or database caching for production applications.
+</Warning>
+
+### Cache Warming
+
+Pre-populate cache on startup:
+
+```typescript
+import { Injectable, OnModuleInit } from '@nestjs/common';
+
+@Injectable()
+export class CacheWarmupService implements OnModuleInit {
+  constructor(private productsService: ProductsService) {}
+  
+  async onModuleInit() {
+    // Warm up frequently accessed data
+    await this.productsService.findAll();
+  }
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Choose Appropriate Duration">
+    Set cache duration based on how frequently data changes. Frequently updated data should have shorter cache times.
+  </Step>
+  
+  <Step title="Use Redis in Production">
+    Always use Redis or another external cache provider in production environments.
+  </Step>
+  
+  <Step title="Monitor Cache Performance">
+    Track cache hit rates and adjust durations accordingly.
+  </Step>
+  
+  <Step title="Implement Cache Invalidation">
+    Clear cache when data is updated to prevent serving stale data.
+  </Step>
+  
+  <Step title="Consider Memory Limits">
+    Set appropriate memory limits for your cache provider to prevent out-of-memory issues.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Cache Not Working
+
+If caching isn't working:
+
+1. Verify TypeORM cache is configured
+2. Check that `cache` option is set in query configuration
+3. Ensure cache provider (Redis/database) is running
+4. Verify no `?cache=0` parameter is being sent
+
+### Stale Data Issues
+
+If you're seeing stale data:
+
+1. Reduce cache duration
+2. Implement cache invalidation on updates
+3. Use `?cache=0` to bypass cache when needed
+4. Clear cache after write operations
+
+### Memory Issues
+
+If experiencing memory problems:
+
+1. Switch from in-memory to Redis caching
+2. Reduce cache duration
+3. Set Redis `maxmemory` policy
+4. Monitor and clear old cache entries
+
+## Related Resources
+
+- [Global Configuration](/advanced/global-config) - Set global cache settings
+- [Query Options](/api/interfaces/query-options) - Learn about query configuration
+- [TypeORM Caching Documentation](https://typeorm.io/caching) - Official TypeORM cache guide

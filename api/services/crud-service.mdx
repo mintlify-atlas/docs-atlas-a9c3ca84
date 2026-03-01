@@ -1,0 +1,584 @@
+---
+title: CrudService
+description: Abstract base class for CRUD operations in NestJS CRUD framework
+---
+
+# CrudService
+
+The `CrudService` is an abstract base class that defines the contract for implementing CRUD operations in your NestJS applications. All concrete service implementations should extend this class.
+
+## Overview
+
+This abstract class provides:
+- Standard CRUD method signatures
+- Error handling utilities
+- Pagination helpers
+- Query parameter processing
+
+## Abstract Methods
+
+These methods must be implemented by concrete service classes:
+
+### getMany()
+
+Retrieves multiple entities based on query parameters.
+
+```typescript
+abstract getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object containing parsed query parameters and options
+</ParamField>
+
+<ResponseField name="return" type="Promise<GetManyDefaultResponse<T> | T[]>">
+  Returns either an array of entities or a paginated response with metadata
+</ResponseField>
+
+**Example:**
+```typescript
+async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<User> | User[]> {
+  const { parsed, options } = req;
+  // Implementation logic
+  return users;
+}
+```
+
+---
+
+### getOne()
+
+Retrieves a single entity.
+
+```typescript
+abstract getOne(req: CrudRequest): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with search criteria
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  Returns the requested entity
+</ResponseField>
+
+**Example:**
+```typescript
+async getOne(req: CrudRequest): Promise<User> {
+  const user = await this.repository.findOne(req.parsed.search);
+  if (!user) {
+    this.throwNotFoundException('User');
+  }
+  return user;
+}
+```
+
+---
+
+### createOne()
+
+Creates a single entity.
+
+```typescript
+abstract createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  The data transfer object containing entity data to create
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  Returns the created entity
+</ResponseField>
+
+**Example:**
+```typescript
+async createOne(req: CrudRequest, dto: CreateUserDto): Promise<User> {
+  const user = this.repository.create(dto);
+  return await this.repository.save(user);
+}
+```
+
+---
+
+### createMany()
+
+Creates multiple entities in bulk.
+
+```typescript
+abstract createMany(req: CrudRequest, dto: CreateManyDto): Promise<T[]>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object
+</ParamField>
+
+<ParamField path="dto" type="CreateManyDto" required>
+  Object containing a `bulk` array of entities to create
+</ParamField>
+
+<ResponseField name="return" type="Promise<T[]>">
+  Returns an array of created entities
+</ResponseField>
+
+**Example:**
+```typescript
+async createMany(req: CrudRequest, dto: CreateManyDto<User>): Promise<User[]> {
+  const users = dto.bulk.map(data => this.repository.create(data));
+  return await this.repository.save(users);
+}
+```
+
+---
+
+### updateOne()
+
+Updates an existing entity (partial update).
+
+```typescript
+abstract updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with entity identifier
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  The data to update (partial entity data)
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  Returns the updated entity
+</ResponseField>
+
+**Example:**
+```typescript
+async updateOne(req: CrudRequest, dto: UpdateUserDto): Promise<User> {
+  const user = await this.getOne(req);
+  Object.assign(user, dto);
+  return await this.repository.save(user);
+}
+```
+
+---
+
+### replaceOne()
+
+Replaces an entire entity (full update).
+
+```typescript
+abstract replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with entity identifier
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  The complete entity data to replace
+</ParamField>
+
+<ResponseField name="return" type="Promise<T>">
+  Returns the replaced entity
+</ResponseField>
+
+<Note>
+  Unlike `updateOne()`, `replaceOne()` replaces the entire entity rather than merging properties.
+</Note>
+
+**Example:**
+```typescript
+async replaceOne(req: CrudRequest, dto: User): Promise<User> {
+  const id = req.parsed.search.id;
+  await this.repository.delete(id);
+  const user = this.repository.create({ ...dto, id });
+  return await this.repository.save(user);
+}
+```
+
+---
+
+### deleteOne()
+
+Deletes a single entity.
+
+```typescript
+abstract deleteOne(req: CrudRequest): Promise<void | T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with entity identifier
+</ParamField>
+
+<ResponseField name="return" type="Promise<void | T>">
+  Returns void or the deleted entity if configured to return deleted data
+</ResponseField>
+
+**Example:**
+```typescript
+async deleteOne(req: CrudRequest): Promise<void> {
+  const user = await this.getOne(req);
+  await this.repository.remove(user);
+}
+```
+
+---
+
+### recoverOne()
+
+Recovers a soft-deleted entity.
+
+```typescript
+abstract recoverOne(req: CrudRequest): Promise<void | T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with entity identifier
+</ParamField>
+
+<ResponseField name="return" type="Promise<void | T>">
+  Returns void or the recovered entity
+</ResponseField>
+
+<Note>
+  This method is only applicable when soft delete is enabled on your entity.
+</Note>
+
+**Example:**
+```typescript
+async recoverOne(req: CrudRequest): Promise<User> {
+  const user = await this.repository.findOne({
+    where: req.parsed.search,
+    withDeleted: true
+  });
+  return await this.repository.recover(user);
+}
+```
+
+## Utility Methods
+
+### throwBadRequestException()
+
+Throws a `BadRequestException` with an optional message.
+
+```typescript
+throwBadRequestException(msg?: unknown): BadRequestException
+```
+
+<ParamField path="msg" type="unknown">
+  Optional error message
+</ParamField>
+
+**Example:**
+```typescript
+if (!dto.email) {
+  this.throwBadRequestException('Email is required');
+}
+```
+
+---
+
+### throwNotFoundException()
+
+Throws a `NotFoundException` with a resource name.
+
+```typescript
+throwNotFoundException(name: string): NotFoundException
+```
+
+<ParamField path="name" type="string" required>
+  The name of the resource that was not found
+</ParamField>
+
+**Example:**
+```typescript
+const user = await this.repository.findOne(id);
+if (!user) {
+  this.throwNotFoundException('User');
+}
+```
+
+---
+
+### createPageInfo()
+
+Creates a paginated response wrapper.
+
+```typescript
+createPageInfo(
+  data: T[],
+  total: number,
+  limit: number,
+  offset: number
+): GetManyDefaultResponse<T>
+```
+
+<ParamField path="data" type="T[]" required>
+  Array of entities for the current page
+</ParamField>
+
+<ParamField path="total" type="number" required>
+  Total number of entities matching the query
+</ParamField>
+
+<ParamField path="limit" type="number" required>
+  Maximum number of entities per page
+</ParamField>
+
+<ParamField path="offset" type="number" required>
+  Number of entities to skip
+</ParamField>
+
+<ResponseField name="return" type="GetManyDefaultResponse<T>">
+  Object containing:
+  - `data`: Array of entities
+  - `count`: Number of entities in current page
+  - `total`: Total number of entities
+  - `page`: Current page number (1-indexed)
+  - `pageCount`: Total number of pages
+</ResponseField>
+
+<Note>
+  Override this method to customize the pagination response format.
+</Note>
+
+**Example:**
+```typescript
+const pageInfo = this.createPageInfo(users, 100, 10, 20);
+// Returns:
+// {
+//   data: [...],
+//   count: 10,
+//   total: 100,
+//   page: 3,
+//   pageCount: 10
+// }
+```
+
+---
+
+### decidePagination()
+
+Determines whether pagination should be applied.
+
+```typescript
+decidePagination(
+  parsed: ParsedRequestParams,
+  options: CrudRequestOptions
+): boolean
+```
+
+<ParamField path="parsed" type="ParsedRequestParams" required>
+  Parsed request parameters
+</ParamField>
+
+<ParamField path="options" type="CrudRequestOptions" required>
+  CRUD configuration options
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  Returns `true` if pagination should be applied
+</ResponseField>
+
+**Example:**
+```typescript
+const shouldPaginate = this.decidePagination(req.parsed, req.options);
+if (shouldPaginate) {
+  // Apply pagination
+}
+```
+
+---
+
+### getTake()
+
+Calculates the number of entities to fetch.
+
+```typescript
+getTake(
+  query: ParsedRequestParams,
+  options: QueryOptions
+): number | null
+```
+
+<ParamField path="query" type="ParsedRequestParams" required>
+  Parsed query parameters
+</ParamField>
+
+<ParamField path="options" type="QueryOptions" required>
+  Query configuration options
+</ParamField>
+
+<ResponseField name="return" type="number | null">
+  Number of entities to fetch, or null if no limit
+</ResponseField>
+
+**Example:**
+```typescript
+const take = this.getTake(req.parsed, req.options.query);
+// Returns the smaller of: query limit, options limit, or maxLimit
+```
+
+---
+
+### getSkip()
+
+Calculates the number of entities to skip for pagination.
+
+```typescript
+getSkip(
+  query: ParsedRequestParams,
+  take: number
+): number | null
+```
+
+<ParamField path="query" type="ParsedRequestParams" required>
+  Parsed query parameters
+</ParamField>
+
+<ParamField path="take" type="number" required>
+  Number of entities per page
+</ParamField>
+
+<ResponseField name="return" type="number | null">
+  Number of entities to skip, or null if no offset
+</ResponseField>
+
+**Example:**
+```typescript
+const skip = this.getSkip(req.parsed, 10);
+// For page=3, returns 20 (skip first 2 pages of 10 items each)
+```
+
+---
+
+### getPrimaryParams()
+
+Extracts primary parameter field names from options.
+
+```typescript
+getPrimaryParams(options: CrudRequestOptions): string[]
+```
+
+<ParamField path="options" type="CrudRequestOptions" required>
+  CRUD configuration options
+</ParamField>
+
+<ResponseField name="return" type="string[]">
+  Array of primary parameter field names
+</ResponseField>
+
+**Example:**
+```typescript
+const primaryParams = this.getPrimaryParams(req.options);
+// Returns: ['id'] or ['userId', 'projectId'] for composite keys
+```
+
+## Implementation Example
+
+Here's a complete example of implementing a custom CRUD service:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { CrudService, CrudRequest, CreateManyDto, GetManyDefaultResponse } from '@nestjsx/crud';
+import { User } from './user.entity';
+
+@Injectable()
+export class UserService extends CrudService<User> {
+  constructor(
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+  ) {
+    super();
+  }
+
+  async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<User> | User[]> {
+    const { parsed, options } = req;
+    const [data, total] = await this.userRepository.findAndCount({
+      take: this.getTake(parsed, options.query),
+      skip: this.getSkip(parsed, this.getTake(parsed, options.query)),
+    });
+
+    if (this.decidePagination(parsed, options)) {
+      return this.createPageInfo(data, total, parsed.limit, parsed.offset);
+    }
+
+    return data;
+  }
+
+  async getOne(req: CrudRequest): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: req.parsed.search,
+    });
+
+    if (!user) {
+      this.throwNotFoundException('User');
+    }
+
+    return user;
+  }
+
+  async createOne(req: CrudRequest, dto: User): Promise<User> {
+    const user = this.userRepository.create(dto);
+    return await this.userRepository.save(user);
+  }
+
+  async createMany(req: CrudRequest, dto: CreateManyDto<User>): Promise<User[]> {
+    if (!dto.bulk || !dto.bulk.length) {
+      this.throwBadRequestException('Empty data. Nothing to save.');
+    }
+
+    const users = dto.bulk.map(data => this.userRepository.create(data));
+    return await this.userRepository.save(users);
+  }
+
+  async updateOne(req: CrudRequest, dto: Partial<User>): Promise<User> {
+    const user = await this.getOne(req);
+    Object.assign(user, dto);
+    return await this.userRepository.save(user);
+  }
+
+  async replaceOne(req: CrudRequest, dto: User): Promise<User> {
+    const user = await this.getOne(req);
+    const replaced = this.userRepository.create({
+      ...dto,
+      id: user.id,
+    });
+    return await this.userRepository.save(replaced);
+  }
+
+  async deleteOne(req: CrudRequest): Promise<void | User> {
+    const user = await this.getOne(req);
+    await this.userRepository.remove(user);
+    
+    if (req.options.routes.deleteOneBase.returnDeleted) {
+      return user;
+    }
+  }
+
+  async recoverOne(req: CrudRequest): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: req.parsed.search,
+      withDeleted: true,
+    });
+
+    if (!user) {
+      this.throwNotFoundException('User');
+    }
+
+    return await this.userRepository.recover(user);
+  }
+}
+```
+
+## Related Documentation
+
+- [TypeOrmCrudService](/api/services/typeorm-crud-service) - TypeORM implementation
+- [CRUD Controllers](/concepts/controllers)
+- [Request Parsing](/concepts/requests)

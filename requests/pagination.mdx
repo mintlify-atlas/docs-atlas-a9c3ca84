@@ -1,0 +1,503 @@
+---
+title: Pagination
+description: Paginate API results using limit, offset, and page parameters in NestJS CRUD
+---
+
+Pagination allows you to split large datasets into manageable chunks, improving performance and user experience. The NestJS CRUD framework supports multiple pagination strategies.
+
+## Pagination Methods
+
+There are two primary ways to paginate results:
+
+1. **Limit/Offset**: Specify the number of items and how many to skip
+2. **Limit/Page**: Specify the number of items per page and the page number
+
+## Limit Parameter
+
+The `limit` parameter controls how many results to return:
+
+```bash
+GET /users?limit=10
+```
+
+This returns the first 10 users.
+
+### Aliases
+
+The `limit` parameter has an alias:
+- `limit`
+- `per_page`
+
+```bash
+# Both are equivalent
+GET /users?limit=10
+GET /users?per_page=10
+```
+
+### Examples
+
+```bash
+# Get 10 users
+GET /users?limit=10
+
+# Get 25 products
+GET /products?limit=25
+
+# Get 100 posts
+GET /posts?limit=100
+```
+
+<Note>
+  Without a `limit` parameter, the API may return all results or use a server-configured default limit.
+</Note>
+
+## Offset-Based Pagination
+
+Offset-based pagination uses `limit` and `offset` parameters:
+
+- **limit**: Number of items to return
+- **offset**: Number of items to skip
+
+### Syntax
+
+```bash
+GET /users?limit={items_per_page}&offset={items_to_skip}
+```
+
+### Examples
+
+```bash
+# First page (items 1-10)
+GET /users?limit=10&offset=0
+
+# Second page (items 11-20)
+GET /users?limit=10&offset=10
+
+# Third page (items 21-30)
+GET /users?limit=10&offset=20
+
+# Fourth page (items 31-40)
+GET /users?limit=10&offset=30
+```
+
+### Calculation
+
+To calculate the offset for a specific page:
+
+```javascript
+const limit = 10;      // items per page
+const page = 3;        // target page (1-indexed)
+const offset = (page - 1) * limit;  // offset = 20
+```
+
+### Use Cases
+
+- When you need precise control over which items to retrieve
+- When implementing custom pagination logic
+- When you want to skip to specific positions in the dataset
+
+```bash
+# Skip first 50 users, get next 25
+GET /users?limit=25&offset=50
+
+# Get items 100-149
+GET /products?limit=50&offset=100
+```
+
+## Page-Based Pagination
+
+Page-based pagination uses `limit` and `page` parameters:
+
+- **limit**: Number of items per page
+- **page**: Page number (1-indexed)
+
+### Syntax
+
+```bash
+GET /users?limit={items_per_page}&page={page_number}
+```
+
+### Examples
+
+```bash
+# First page
+GET /users?limit=10&page=1
+
+# Second page
+GET /users?limit=10&page=2
+
+# Third page
+GET /users?limit=10&page=3
+```
+
+<Tip>
+  Page numbers start at 1, not 0. `page=1` is the first page.
+</Tip>
+
+### Use Cases
+
+- When building traditional paginated UIs with page numbers
+- When implementing "Previous" and "Next" navigation
+- When the user needs to jump to a specific page
+
+```bash
+# User-friendly pagination
+GET /products?limit=20&page=1  # Page 1
+GET /products?limit=20&page=2  # Page 2
+GET /products?limit=20&page=3  # Page 3
+```
+
+## Offset vs Page
+
+| Aspect | Offset | Page |
+|--------|--------|------|
+| Parameter | `offset={number}` | `page={number}` |
+| Index | 0-based (offset) | 1-based (page) |
+| Use Case | Precise positioning | User-friendly navigation |
+| Calculation | Manual | Automatic |
+
+### Cannot Use Both
+
+<Warning>
+  You cannot use `offset` and `page` together. Choose one pagination method.
+</Warning>
+
+```bash
+# ❌ Invalid - don't mix offset and page
+GET /users?limit=10&offset=20&page=3
+
+# ✅ Valid - use offset
+GET /users?limit=10&offset=20
+
+# ✅ Valid - use page
+GET /users?limit=10&page=3
+```
+
+## Pagination with Sorting
+
+Always use the same sort order across paginated requests:
+
+```bash
+# Page 1: First 10 newest users
+GET /users?sort=createdAt,DESC&limit=10&page=1
+
+# Page 2: Next 10 newest users
+GET /users?sort=createdAt,DESC&limit=10&page=2
+
+# Page 3: Next 10 newest users
+GET /users?sort=createdAt,DESC&limit=10&page=3
+```
+
+<Warning>
+  Inconsistent sorting across paginated requests can cause items to appear on multiple pages or be skipped entirely.
+</Warning>
+
+### Best Practice
+
+```bash
+# ✅ Good: Consistent sort
+GET /users?sort=id,ASC&limit=10&page=1
+GET /users?sort=id,ASC&limit=10&page=2
+
+# ❌ Bad: Inconsistent sort
+GET /users?sort=name,ASC&limit=10&page=1
+GET /users?sort=createdAt,DESC&limit=10&page=2
+```
+
+## Pagination with Filtering
+
+Combine pagination with filters to paginate through filtered results:
+
+```bash
+# First page of active users
+GET /users?filter=isActive||eq||true&sort=name,ASC&limit=20&page=1
+
+# Second page of active users
+GET /users?filter=isActive||eq||true&sort=name,ASC&limit=20&page=2
+```
+
+### Important Considerations
+
+1. **Keep filters consistent**: Use the same filters across all pages
+2. **Total count may change**: If data is added/removed, total pages may change
+3. **Filter before paginating**: Pagination applies to filtered results
+
+```bash
+# Paginating filtered products
+GET /products?filter=category||eq||electronics&filter=inStock||eq||true&sort=price,ASC&limit=50&page=1
+```
+
+## Complete Pagination Examples
+
+### Basic Pagination
+
+```bash
+# 10 items per page
+GET /users?limit=10&page=1  # Items 1-10
+GET /users?limit=10&page=2  # Items 11-20
+GET /users?limit=10&page=3  # Items 21-30
+```
+
+### With Sorting
+
+```bash
+# Newest posts first, 20 per page
+GET /posts?sort=createdAt,DESC&limit=20&page=1
+GET /posts?sort=createdAt,DESC&limit=20&page=2
+```
+
+### With Filtering and Sorting
+
+```bash
+# Active users, alphabetically, 25 per page
+GET /users?filter=isActive||eq||true&sort=name,ASC&limit=25&page=1
+GET /users?filter=isActive||eq||true&sort=name,ASC&limit=25&page=2
+```
+
+### With Field Selection
+
+```bash
+# Only specific fields, paginated
+GET /users?fields=id,name,email&sort=name,ASC&limit=50&page=1
+```
+
+## Implementing Pagination in Frontend
+
+### React Example
+
+```javascript
+import { useState, useEffect } from 'react';
+
+function UserList() {
+  const [users, setUsers] = useState([]);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+
+  useEffect(() => {
+    fetch(`/api/users?limit=${limit}&page=${page}&sort=name,ASC`)
+      .then(res => res.json())
+      .then(data => setUsers(data));
+  }, [page, limit]);
+
+  return (
+    <div>
+      {users.map(user => (
+        <div key={user.id}>{user.name}</div>
+      ))}
+      
+      <button onClick={() => setPage(p => Math.max(1, p - 1))}>
+        Previous
+      </button>
+      <span>Page {page}</span>
+      <button onClick={() => setPage(p => p + 1)}>
+        Next
+      </button>
+    </div>
+  );
+}
+```
+
+### JavaScript with RequestQueryBuilder
+
+```javascript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+// Page 1
+const query1 = RequestQueryBuilder.create()
+  .setLimit(20)
+  .setPage(1)
+  .sortBy({ field: 'createdAt', order: 'DESC' })
+  .query();
+// Result: limit=20&page=1&sort=createdAt,DESC
+
+// Page 2
+const query2 = RequestQueryBuilder.create()
+  .setLimit(20)
+  .setPage(2)
+  .sortBy({ field: 'createdAt', order: 'DESC' })
+  .query();
+// Result: limit=20&page=2&sort=createdAt,DESC
+```
+
+## Infinite Scroll
+
+For infinite scroll UIs, use offset-based pagination:
+
+```javascript
+import { useState, useEffect } from 'react';
+
+function InfiniteUserList() {
+  const [users, setUsers] = useState([]);
+  const [offset, setOffset] = useState(0);
+  const limit = 20;
+
+  const loadMore = () => {
+    fetch(`/api/users?limit=${limit}&offset=${offset}&sort=createdAt,DESC`)
+      .then(res => res.json())
+      .then(newUsers => {
+        setUsers(prev => [...prev, ...newUsers]);
+        setOffset(prev => prev + limit);
+      });
+  };
+
+  useEffect(() => {
+    loadMore();
+  }, []);
+
+  return (
+    <div>
+      {users.map(user => (
+        <div key={user.id}>{user.name}</div>
+      ))}
+      <button onClick={loadMore}>Load More</button>
+    </div>
+  );
+}
+```
+
+## Cursor-Based Pagination
+
+For datasets that frequently change, consider cursor-based pagination using filters:
+
+```bash
+# First page: Get first 20 items
+GET /posts?sort=id,DESC&limit=20
+
+# Next page: Get 20 items after last ID (e.g., 1000)
+GET /posts?filter=id||lt||1000&sort=id,DESC&limit=20
+
+# Next page: Get 20 items after last ID (e.g., 980)
+GET /posts?filter=id||lt||980&sort=id,DESC&limit=20
+```
+
+This approach is more stable when data is being added or removed.
+
+## Performance Considerations
+
+### Always Use Limits
+
+```bash
+# ❌ Bad: No limit (may return thousands of records)
+GET /users
+
+# ✅ Good: With limit
+GET /users?limit=50
+```
+
+### Avoid Large Offsets
+
+```bash
+# ❌ Bad: Very large offset (slow query)
+GET /users?limit=10&offset=100000
+
+# ✅ Better: Use cursor-based pagination for large datasets
+GET /users?filter=id||gt||100000&limit=10&sort=id,ASC
+```
+
+Large offsets can be slow because the database still has to scan through skipped rows.
+
+### Index Sorted Fields
+
+Always create database indexes on fields used for sorting in pagination:
+
+```typescript
+// TypeORM example
+@Entity()
+@Index(['createdAt'])  // Index for pagination sorting
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @CreateDateColumn()
+  createdAt: Date;
+}
+```
+
+## Common Pagination Patterns
+
+### Standard Table Pagination
+
+```bash
+# Show 50 items per page with page numbers
+GET /users?limit=50&page=1&sort=name,ASC
+GET /users?limit=50&page=2&sort=name,ASC
+```
+
+### Mobile Feed
+
+```bash
+# Load 20 items at a time, newest first
+GET /posts?limit=20&offset=0&sort=createdAt,DESC
+GET /posts?limit=20&offset=20&sort=createdAt,DESC
+GET /posts?limit=20&offset=40&sort=createdAt,DESC
+```
+
+### Search Results
+
+```bash
+# Show 10 results per page
+GET /products?filter=name||cont||laptop&limit=10&page=1&sort=relevance,DESC
+GET /products?filter=name||cont||laptop&limit=10&page=2&sort=relevance,DESC
+```
+
+## Error Handling
+
+Invalid pagination parameters will throw a `RequestQueryException`:
+
+```bash
+# Invalid limit (not a number)
+GET /users?limit=abc
+# Error: Invalid limit. Number expected
+
+# Invalid page (not a number)
+GET /users?page=xyz
+# Error: Invalid page. Number expected
+
+# Invalid offset (not a number)
+GET /users?offset=foo
+# Error: Invalid offset. Number expected
+```
+
+## Best Practices
+
+1. **Always set a limit**: Never rely on default limits
+2. **Use consistent sorting**: Keep the same sort order across pages
+3. **Choose the right method**: Use `page` for UI, `offset` for precise control
+4. **Consider cursor pagination**: For frequently changing datasets
+5. **Index sorted fields**: Add database indexes to improve performance
+6. **Document limits**: Let API consumers know the maximum allowed limit
+7. **Return metadata**: Include total count, total pages, current page in responses
+8. **Handle edge cases**: Validate page numbers and offsets
+
+## Response Metadata
+
+Consider including pagination metadata in your API responses:
+
+```json
+{
+  "data": [...],
+  "count": 20,
+  "total": 234,
+  "page": 1,
+  "pageCount": 12
+}
+```
+
+This helps clients build better pagination UIs.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sorting" icon="arrow-down-a-z" href="./sorting">
+    Learn how to sort paginated results
+  </Card>
+  <Card title="Filtering" icon="filter" href="./filtering">
+    Combine pagination with filters
+  </Card>
+  <Card title="Relations" icon="link" href="./relations">
+    Paginate results with joined relations
+  </Card>
+  <Card title="Query Parameters" icon="bars" href="./query-params">
+    Overview of all query parameters
+  </Card>
+</CardGroup>

@@ -1,0 +1,456 @@
+---
+title: "CRUD options"
+description: "Complete reference for all CrudOptions configuration properties"
+---
+
+The `CrudOptions` interface defines all available configuration options for the `@Crud()` decorator.
+
+## Interface definition
+
+```typescript
+interface CrudOptions {
+  model: ModelOptions;
+  dto?: DtoOptions;
+  serialize?: SerializeOptions;
+  query?: QueryOptions;
+  routes?: RoutesOptions;
+  params?: ParamsOptions;
+  validation?: ValidationPipeOptions | false;
+  routesFactory?: typeof CrudRoutesFactory;
+}
+```
+
+## Model options
+
+<ParamField path="model" type="ModelOptions" required>
+  Defines the entity model for this controller.
+</ParamField>
+
+<ParamField path="model.type" type="any" required>
+  The entity class that this controller manages.
+</ParamField>
+
+```typescript
+model: {
+  type: User,
+}
+```
+
+## DTO options
+
+<ParamField path="dto" type="DtoOptions">
+  Custom Data Transfer Objects for request validation.
+</ParamField>
+
+<ParamField path="dto.create" type="any">
+  DTO class for create operations (POST).
+</ParamField>
+
+<ParamField path="dto.update" type="any">
+  DTO class for update operations (PATCH).
+</ParamField>
+
+<ParamField path="dto.replace" type="any">
+  DTO class for replace operations (PUT).
+</ParamField>
+
+### Example
+
+```typescript
+import { CreateUserDto, UpdateUserDto, ReplaceUserDto } from './dto';
+
+@Crud({
+  model: { type: User },
+  dto: {
+    create: CreateUserDto,
+    update: UpdateUserDto,
+    replace: ReplaceUserDto,
+  },
+})
+```
+
+<Note>
+  When DTOs are not specified, the entity class is used with validation groups `CRUD-CREATE` and `CRUD-UPDATE`.
+</Note>
+
+## Serialize options
+
+<ParamField path="serialize" type="SerializeOptions">
+  Response transformation configuration for each route type.
+</ParamField>
+
+<ParamField path="serialize.getMany" type="Type<any> | false">
+  Response DTO for the get many route.
+</ParamField>
+
+<ParamField path="serialize.get" type="Type<any> | false">
+  Response DTO for the get one route.
+</ParamField>
+
+<ParamField path="serialize.create" type="Type<any> | false">
+  Response DTO for the create one route.
+</ParamField>
+
+<ParamField path="serialize.createMany" type="Type<any> | false">
+  Response DTO for the create many route.
+</ParamField>
+
+<ParamField path="serialize.update" type="Type<any> | false">
+  Response DTO for the update route.
+</ParamField>
+
+<ParamField path="serialize.replace" type="Type<any> | false">
+  Response DTO for the replace route.
+</ParamField>
+
+<ParamField path="serialize.delete" type="Type<any> | false">
+  Response DTO for the delete route.
+</ParamField>
+
+<ParamField path="serialize.recover" type="Type<any> | false">
+  Response DTO for the recover route.
+</ParamField>
+
+### Example
+
+```typescript
+import { GetCompanyResponseDto } from './responses';
+
+@Crud({
+  model: { type: Company },
+  serialize: {
+    get: GetCompanyResponseDto,
+    getMany: GetCompanyResponseDto,
+  },
+})
+```
+
+```typescript GetCompanyResponseDto
+import { Exclude } from 'class-transformer';
+
+export class GetCompanyResponseDto {
+  id: number;
+  name: string;
+  domain: string;
+  description: string;
+  
+  @Exclude()
+  createdAt: Date;
+  
+  @Exclude()
+  updatedAt: Date;
+}
+```
+
+## Query options
+
+<ParamField path="query" type="QueryOptions">
+  Configuration for query behavior, filtering, pagination, and joins.
+</ParamField>
+
+### Allow and exclude fields
+
+<ParamField path="query.allow" type="string[]">
+  Whitelist of fields that can be used in queries (filter, sort, select).
+</ParamField>
+
+<ParamField path="query.exclude" type="string[]">
+  Blacklist of fields that cannot be used in queries.
+</ParamField>
+
+<ParamField path="query.persist" type="string[]">
+  Fields that are always returned in responses, even if not requested.
+</ParamField>
+
+### Filtering
+
+<ParamField path="query.filter" type="QueryFilterOption">
+  Server-side filters that are always applied to queries.
+</ParamField>
+
+```typescript
+query: {
+  filter: {
+    isActive: true,
+  },
+}
+```
+
+### Sorting
+
+<ParamField path="query.sort" type="QuerySort[]">
+  Default sort order for queries.
+</ParamField>
+
+```typescript
+query: {
+  sort: [
+    { field: 'createdAt', order: 'DESC' },
+  ],
+}
+```
+
+### Pagination
+
+<ParamField path="query.limit" type="number">
+  Default number of entities to return per page.
+</ParamField>
+
+<ParamField path="query.maxLimit" type="number">
+  Maximum number of entities that can be requested per page.
+</ParamField>
+
+<ParamField path="query.alwaysPaginate" type="boolean">
+  When `true`, all responses are paginated. When `false`, only paginate when limit is specified.
+</ParamField>
+
+### Soft delete
+
+<ParamField path="query.softDelete" type="boolean">
+  Enable soft delete support. Deleted entities are filtered out by default.
+</ParamField>
+
+```typescript
+query: {
+  softDelete: true,
+}
+```
+
+### Caching
+
+<ParamField path="query.cache" type="number | false">
+  Cache duration in milliseconds, or `false` to disable caching.
+</ParamField>
+
+### Join options
+
+<ParamField path="query.join" type="JoinOptions">
+  Configuration for entity relations.
+</ParamField>
+
+```typescript
+interface JoinOptions {
+  [relationName: string]: JoinOption;
+}
+
+interface JoinOption {
+  alias?: string;         // Query alias for this relation
+  allow?: string[];       // Allowed fields in queries
+  eager?: boolean;        // Always load this relation
+  exclude?: string[];     // Excluded fields
+  persist?: string[];     // Always return these fields
+  select?: false;         // Prevent selecting this relation
+  required?: boolean;     // Use INNER JOIN instead of LEFT JOIN
+}
+```
+
+### Join example
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    join: {
+      company: {
+        exclude: ['description'],
+      },
+      'company.projects': {
+        alias: 'pr',
+        exclude: ['description'],
+      },
+      profile: {
+        eager: true,
+        exclude: ['updatedAt'],
+      },
+    },
+  },
+})
+```
+
+<Accordion title="Query join features">
+  - **Nested joins**: Use dot notation like `'company.projects'` to join through relations
+  - **Eager loading**: Set `eager: true` to always include the relation
+  - **Field filtering**: Use `allow` and `exclude` to control which relation fields can be queried
+  - **Custom aliases**: Provide an `alias` for use in query parameters
+  - **Required joins**: Set `required: true` for INNER JOIN behavior
+</Accordion>
+
+## Params options
+
+<ParamField path="params" type="ParamsOptions">
+  Configuration for URL path parameters.
+</ParamField>
+
+```typescript
+interface ParamsOptions {
+  [paramName: string]: ParamOption;
+}
+
+interface ParamOption {
+  field?: string;           // Entity field name
+  type?: 'number' | 'string' | 'uuid';  // Parameter type
+  primary?: boolean;        // Is this the primary key?
+  disabled?: boolean;       // Disable this parameter
+}
+```
+
+### Example: Nested routes
+
+```typescript
+@Crud({
+  model: { type: User },
+  params: {
+    companyId: {
+      field: 'companyId',
+      type: 'number',
+    },
+    id: {
+      field: 'id',
+      type: 'number',
+      primary: true,
+    },
+  },
+})
+@Controller('/companies/:companyId/users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+This creates routes like:
+- `GET /companies/1/users`
+- `GET /companies/1/users/5`
+- `POST /companies/1/users`
+
+### Example: UUID primary key
+
+```typescript
+@Crud({
+  model: { type: Device },
+  params: {
+    deviceKey: {
+      field: 'deviceKey',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+})
+@Controller('/devices')
+export class DevicesController {}
+```
+
+### Example: Disabled parameter
+
+```typescript
+@Crud({
+  model: { type: User },
+  routes: {
+    only: ['getOneBase', 'updateOneBase'],
+  },
+  params: {
+    id: {
+      primary: true,
+      disabled: true,  // User ID comes from auth context
+    },
+  },
+})
+@Controller('me')
+export class MeController {}
+```
+
+## Validation options
+
+<ParamField path="validation" type="ValidationPipeOptions | false">
+  NestJS ValidationPipe configuration, or `false` to disable validation.
+</ParamField>
+
+```typescript
+@Crud({
+  model: { type: User },
+  validation: {
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  },
+})
+```
+
+Set to `false` to disable automatic validation:
+
+```typescript
+@Crud({
+  model: { type: User },
+  validation: false,
+})
+```
+
+See [Validation](/controllers/validation) for more details.
+
+## Routes factory
+
+<ParamField path="routesFactory" type="typeof CrudRoutesFactory">
+  Custom routes factory class for advanced customization.
+</ParamField>
+
+<Warning>
+  This is an advanced option for creating custom route generation logic. Most users should not need to modify this.
+</Warning>
+
+## Complete example
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+import { CreateUserDto, UpdateUserDto } from './dto';
+import { GetUserResponseDto } from './responses';
+
+@Crud({
+  model: {
+    type: User,
+  },
+  dto: {
+    create: CreateUserDto,
+    update: UpdateUserDto,
+  },
+  serialize: {
+    get: GetUserResponseDto,
+    getMany: GetUserResponseDto,
+  },
+  query: {
+    limit: 25,
+    maxLimit: 100,
+    alwaysPaginate: true,
+    softDelete: true,
+    sort: [
+      { field: 'createdAt', order: 'DESC' },
+    ],
+    join: {
+      company: {
+        eager: true,
+        exclude: ['description'],
+      },
+      profile: {
+        eager: true,
+      },
+    },
+  },
+  params: {
+    id: {
+      field: 'id',
+      type: 'number',
+      primary: true,
+    },
+  },
+  validation: {
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```

@@ -1,0 +1,579 @@
+---
+title: Requests
+description: Build and parse powerful query requests with filtering, sorting, pagination, and relation loading
+---
+
+The `@nestjsx/crud-request` package provides utilities for building and parsing complex queries. It supports filtering, sorting, pagination, field selection, and relation joins through URL query parameters.
+
+## Query parameters
+
+Clients can control API responses using standardized query parameters:
+
+### Field selection
+
+Select specific fields to include in the response:
+
+```bash
+GET /companies?fields=name,domain
+GET /companies?select=id,name,description
+```
+
+Both `fields` and `select` parameters work identically.
+
+### Filtering
+
+Filter results using comparison operators:
+
+```bash
+# Exact match
+GET /companies?filter=name||$eq||Acme Corp
+
+# Contains (case-sensitive)
+GET /companies?filter=name||$cont||Tech
+
+# Greater than
+GET /companies?filter=id||$gt||100
+
+# Multiple filters (AND logic)
+GET /companies?filter=name||$cont||Tech&filter=id||$gt||50
+```
+
+### Comparison operators
+
+The framework supports these filter operators:
+
+| Operator | Description | Example |
+|----------|-------------|----------|
+| `$eq` | Equals | `?filter=id||$eq||1` |
+| `$ne` | Not equals | `?filter=status||$ne||draft` |
+| `$gt` | Greater than | `?filter=age||$gt||18` |
+| `$lt` | Less than | `?filter=price||$lt||100` |
+| `$gte` | Greater than or equal | `?filter=score||$gte||50` |
+| `$lte` | Less than or equal | `?filter=stock||$lte||10` |
+| `$starts` | Starts with | `?filter=name||$starts||A` |
+| `$ends` | Ends with | `?filter=email||$ends||@example.com` |
+| `$cont` | Contains | `?filter=description||$cont||keyword` |
+| `$excl` | Excludes | `?filter=name||$excl||test` |
+| `$in` | In array | `?filter=status||$in||active,pending` |
+| `$notin` | Not in array | `?filter=role||$notin||admin,moderator` |
+| `$isnull` | Is NULL | `?filter=deletedAt||$isnull` |
+| `$notnull` | Is not NULL | `?filter=publishedAt||$notnull` |
+| `$between` | Between values | `?filter=age||$between||18,65` |
+
+<Note>
+Case-insensitive variants are available by appending `L` to the operator: `$eqL`, `$contL`, `$startsL`, etc.
+</Note>
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:854-971`:
+
+### OR conditions
+
+Use the `or` parameter for OR logic:
+
+```bash
+# Name contains "Tech" OR name contains "Software"
+GET /companies?or=name||$cont||Tech&or=name||$cont||Software
+```
+
+### Advanced search
+
+For complex queries, use the `s` (search) parameter with JSON:
+
+```bash
+GET /companies?s={"$and":[{"name":{"$cont":"Tech"}},{"id":{"$gt":10}}]}
+```
+
+Search supports nested `$and` and `$or` conditions:
+
+```typescript
+{
+  "$and": [
+    { "name": { "$cont": "Tech" } },
+    {
+      "$or": [
+        { "domain": { "$ends": ".com" } },
+        { "domain": { "$ends": ".io" } }
+      ]
+    }
+  ]
+}
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:103-108`:
+
+### Sorting
+
+Sort results by one or more fields:
+
+```bash
+# Sort by name ascending
+GET /companies?sort=name,ASC
+
+# Sort by multiple fields
+GET /companies?sort=name,ASC&sort=createdAt,DESC
+```
+
+### Pagination
+
+Paginate results using limit/offset or page-based pagination:
+
+```bash
+# Limit and offset
+GET /companies?limit=10&offset=20
+
+# Page-based (requires limit)
+GET /companies?page=3&limit=10
+```
+
+When pagination is enabled, responses include metadata:
+
+```json
+{
+  "data": [...],
+  "count": 10,
+  "total": 250,
+  "page": 3,
+  "pageCount": 25
+}
+```
+
+### Joining relations
+
+Load related entities:
+
+```bash
+# Join a single relation
+GET /companies?join=users
+
+# Join and select specific fields
+GET /companies?join=users||name,email
+
+# Join multiple relations
+GET /companies?join=users&join=projects
+
+# Join nested relations
+GET /companies?join=users.profile
+```
+
+<Tip>
+Relations must be configured in the controller's `query.join` options before they can be requested.
+</Tip>
+
+### Cache control
+
+Control query caching:
+
+```bash
+# Bypass cache
+GET /companies?cache=0
+```
+
+### Soft deletes
+
+Include soft-deleted records:
+
+```bash
+GET /companies?include_deleted=1
+```
+
+## Request query builder
+
+The `RequestQueryBuilder` class helps build query strings programmatically in frontend applications:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const queryString = RequestQueryBuilder.create()
+  .select(['name', 'domain'])
+  .search({
+    $and: [
+      { name: { $cont: 'Tech' } },
+      { id: { $gt: 10 } }
+    ]
+  })
+  .sortBy({ field: 'name', order: 'ASC' })
+  .setLimit(10)
+  .setPage(1)
+  .setJoin({ field: 'users', select: ['name', 'email'] })
+  .query();
+
+// Result: fields=name,domain&s={...}&sort=name,ASC&limit=10&page=1&join=users||name,email
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:24-243`:
+
+### Builder methods
+
+#### select()
+
+Select specific fields:
+
+```typescript
+RequestQueryBuilder.create()
+  .select(['name', 'email', 'createdAt'])
+  .query();
+// fields=name,email,createdAt
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:95-100`:
+
+#### search()
+
+Add complex search conditions:
+
+```typescript
+RequestQueryBuilder.create()
+  .search({
+    $or: [
+      { status: 'active' },
+      { status: 'pending' }
+    ]
+  })
+  .query();
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:103-108`:
+
+#### setFilter() and setOr()
+
+Add filter conditions:
+
+```typescript
+// AND filters
+RequestQueryBuilder.create()
+  .setFilter({ field: 'name', operator: '$cont', value: 'Tech' })
+  .setFilter({ field: 'id', operator: '$gt', value: 10 })
+  .query();
+// filter=name||$cont||Tech&filter=id||$gt||10
+
+// OR filters
+RequestQueryBuilder.create()
+  .setOr({ field: 'status', operator: '$eq', value: 'active' })
+  .setOr({ field: 'status', operator: '$eq', value: 'pending' })
+  .query();
+// or=status||$eq||active&or=status||$eq||pending
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:110-118`:
+
+Filters can also be passed as arrays:
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter(['name', '$cont', 'Tech'])
+  .query();
+```
+
+#### setJoin()
+
+Join relations:
+
+```typescript
+RequestQueryBuilder.create()
+  .setJoin({ field: 'users' })
+  .setJoin({ field: 'projects', select: ['name', 'status'] })
+  .query();
+// join=users&join=projects||name,status
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:120-131`:
+
+#### sortBy()
+
+Sort results:
+
+```typescript
+RequestQueryBuilder.create()
+  .sortBy({ field: 'createdAt', order: 'DESC' })
+  .sortBy({ field: 'name', order: 'ASC' })
+  .query();
+// sort=createdAt,DESC&sort=name,ASC
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:133-144`:
+
+#### setLimit(), setOffset(), setPage()
+
+Pagination controls:
+
+```typescript
+// Limit and offset
+RequestQueryBuilder.create()
+  .setLimit(25)
+  .setOffset(50)
+  .query();
+// limit=25&offset=50
+
+// Page-based
+RequestQueryBuilder.create()
+  .setLimit(25)
+  .setPage(3)
+  .query();
+// limit=25&page=3
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:146-169`:
+
+#### resetCache()
+
+Bypass cache:
+
+```typescript
+RequestQueryBuilder.create()
+  .resetCache()
+  .query();
+// cache=0
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:161-164`:
+
+#### setIncludeDeleted()
+
+Include soft-deleted records:
+
+```typescript
+RequestQueryBuilder.create()
+  .setIncludeDeleted(1)
+  .query();
+// include_deleted=1
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:166-169`:
+
+### Create from params
+
+Build a query from a params object:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const query = RequestQueryBuilder.create({
+  fields: ['name', 'email'],
+  search: {
+    $and: [
+      { status: 'active' },
+      { role: { $in: ['admin', 'user'] } }
+    ]
+  },
+  filter: [
+    { field: 'createdAt', operator: '$gte', value: '2024-01-01' }
+  ],
+  join: [
+    { field: 'company' },
+    { field: 'profile', select: ['avatar', 'bio'] }
+  ],
+  sort: [
+    { field: 'createdAt', order: 'DESC' }
+  ],
+  limit: 20,
+  page: 1,
+}).query();
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:196-211`:
+
+## Custom query options
+
+Customize parameter names globally:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+RequestQueryBuilder.setOptions({
+  delim: '||',
+  delimStr: ',',
+  paramNamesMap: {
+    fields: ['fields', 'select'],
+    search: 's',
+    filter: 'filter',
+    or: 'or',
+    join: 'join',
+    sort: 'sort',
+    limit: ['limit', 'per_page'],
+    offset: 'offset',
+    page: 'page',
+    cache: 'cache',
+    includeDeleted: 'include_deleted',
+  },
+});
+```
+
+From `/home/daytona/workspace/source/packages/crud-request/src/request-query.builder.ts:25-41`:
+
+## ParsedRequest decorator
+
+In controllers, access parsed request data using the `@ParsedRequest()` decorator:
+
+```typescript
+import {
+  Controller,
+  Get,
+} from '@nestjs/common';
+import {
+  Crud,
+  CrudRequest,
+  ParsedRequest,
+  Override,
+} from '@nestjsx/crud';
+import { Company } from './company.entity';
+import { CompaniesService } from './companies.service';
+
+@Crud({
+  model: { type: Company },
+})
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+
+  @Override('getManyBase')
+  @Get()
+  async getMany(@ParsedRequest() req: CrudRequest) {
+    // Access parsed query parameters
+    console.log(req.parsed.fields);
+    console.log(req.parsed.filter);
+    console.log(req.parsed.join);
+    console.log(req.parsed.sort);
+    console.log(req.parsed.limit);
+    console.log(req.parsed.offset);
+    
+    return this.service.getMany(req);
+  }
+}
+```
+
+The `CrudRequest` interface contains:
+
+```typescript
+interface CrudRequest {
+  parsed: ParsedRequestParams;  // Parsed query parameters
+  options: CrudRequestOptions;  // Controller configuration
+}
+
+interface ParsedRequestParams {
+  fields: string[];              // Selected fields
+  paramsFilter: QueryFilter[];   // Path parameter filters
+  search: SCondition;            // Search conditions
+  filter: QueryFilter[];         // Filter conditions
+  or: QueryFilter[];             // OR filter conditions
+  join: QueryJoin[];             // Join relations
+  sort: QuerySort[];             // Sort orders
+  limit: number;                 // Limit value
+  offset: number;                // Offset value
+  page: number;                  // Page number
+  cache: number;                 // Cache setting
+  includeDeleted: number;        // Include deleted flag
+}
+```
+
+## Validation
+
+Query parameters are automatically validated. Invalid requests return 400 Bad Request:
+
+```bash
+# Invalid operator
+GET /companies?filter=name||$invalid||value
+# 400: Invalid operator
+
+# Invalid field (not in 'allow' list)
+GET /companies?filter=secretField||$eq||value
+# 400: Invalid field
+
+# Invalid join (not configured)
+GET /companies?join=invalidRelation
+# 400: Invalid relation
+```
+
+<Note>
+Validation is based on the controller's `query` configuration. Fields, filters, and joins must be explicitly allowed.
+</Note>
+
+## Examples
+
+### Frontend integration
+
+React example using the query builder:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+import axios from 'axios';
+
+interface Company {
+  id: number;
+  name: string;
+  domain: string;
+}
+
+interface GetManyResponse {
+  data: Company[];
+  count: number;
+  total: number;
+  page: number;
+  pageCount: number;
+}
+
+async function fetchCompanies(
+  searchTerm: string,
+  page: number = 1
+): Promise<GetManyResponse> {
+  const query = RequestQueryBuilder.create()
+    .search({
+      $or: [
+        { name: { $cont: searchTerm } },
+        { domain: { $cont: searchTerm } }
+      ]
+    })
+    .sortBy({ field: 'name', order: 'ASC' })
+    .setLimit(20)
+    .setPage(page)
+    .setJoin({ field: 'users' })
+    .query();
+
+  const response = await axios.get<GetManyResponse>(
+    `/api/companies?${query}`
+  );
+  
+  return response.data;
+}
+```
+
+### Complex filtering
+
+Combine multiple filter types:
+
+```typescript
+const query = RequestQueryBuilder.create({
+  search: {
+    $and: [
+      {
+        $or: [
+          { status: 'active' },
+          { status: 'pending' }
+        ]
+      },
+      { createdAt: { $gte: '2024-01-01' } },
+      { deletedAt: { $isnull: true } }
+    ]
+  },
+  join: [
+    { field: 'company', select: ['name'] },
+    { field: 'profile' }
+  ],
+  sort: [
+    { field: 'priority', order: 'DESC' },
+    { field: 'createdAt', order: 'DESC' }
+  ],
+  limit: 50,
+  page: 1,
+}).query();
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Controllers" icon="router" href="/concepts/controllers">
+    Learn how to configure query options in controllers
+  </Card>
+  <Card title="Services" icon="database" href="/concepts/services">
+    Understand how services process requests
+  </Card>
+</CardGroup>

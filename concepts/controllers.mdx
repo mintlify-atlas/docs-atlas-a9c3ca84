@@ -1,0 +1,421 @@
+---
+title: Controllers
+description: Configure CRUD controllers using the @Crud() decorator to automatically generate RESTful endpoints
+---
+
+CRUD controllers handle HTTP requests and delegate business logic to services. The `@Crud()` decorator automatically generates route handlers for common CRUD operations.
+
+## Basic controller
+
+A minimal CRUD controller requires just three things:
+
+1. The `@Crud()` decorator with model configuration
+2. The `@Controller()` decorator with a route path
+3. A public `service` property
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { Company } from './company.entity';
+import { CompaniesService } from './companies.service';
+
+@Crud({
+  model: { type: Company },
+})
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+<Note>
+The service must be injected as a **public property** named `service`. This is required for the framework to automatically connect route handlers to service methods.
+</Note>
+
+## Configuration options
+
+The `@Crud()` decorator accepts a configuration object with several options:
+
+### Model configuration
+
+Define the entity model that the controller operates on:
+
+```typescript
+@Crud({
+  model: {
+    type: Company,
+  },
+})
+```
+
+### Query options
+
+Control which fields can be queried, filtered, and joined:
+
+```typescript
+@Crud({
+  model: { type: Company },
+  query: {
+    // Limit which fields can be selected
+    allow: ['name', 'domain'],
+    
+    // Exclude sensitive fields
+    exclude: ['secretKey'],
+    
+    // Always include certain fields
+    persist: ['id'],
+    
+    // Default sorting
+    sort: [{ field: 'name', order: 'ASC' }],
+    
+    // Pagination settings
+    limit: 10,
+    maxLimit: 100,
+    alwaysPaginate: false,
+    
+    // Soft delete support
+    softDelete: true,
+    
+    // Configure relations
+    join: {
+      users: {
+        alias: 'companyUsers',
+        exclude: ['email'],
+        eager: true,
+      },
+      'users.projects': {
+        eager: true,
+        alias: 'usersProjects',
+        allow: ['name'],
+      },
+    },
+  },
+})
+```
+
+<Tip>
+Use `alwaysPaginate: true` to force pagination on all list requests, which is recommended for production APIs with large datasets.
+</Tip>
+
+### Route customization
+
+Customize individual route behaviors:
+
+```typescript
+@Crud({
+  model: { type: Company },
+  routes: {
+    // Exclude specific routes
+    exclude: ['createManyBase', 'replaceOneBase'],
+    
+    // Or include only specific routes
+    only: ['getManyBase', 'getOneBase', 'createOneBase'],
+    
+    // Configure individual routes
+    deleteOneBase: {
+      returnDeleted: true,
+    },
+    createOneBase: {
+      returnShallow: false,
+    },
+    updateOneBase: {
+      allowParamsOverride: false,
+      returnShallow: false,
+    },
+  },
+})
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/companies/companies.controller.ts:14-18`:
+
+```typescript
+routes: {
+  deleteOneBase: {
+    returnDeleted: false,
+  },
+},
+```
+
+### Serialization
+
+Control response serialization with DTOs:
+
+```typescript
+import { serialize } from './responses';
+
+@Crud({
+  model: { type: Company },
+  serialize: {
+    get: GetCompanyResponseDto,
+    getMany: GetManyCompaniesResponseDto,
+    create: CreateCompanyResponseDto,
+    update: UpdateCompanyResponseDto,
+    delete: DeleteCompanyResponseDto,
+  },
+})
+```
+
+## Joins and relations
+
+Configure how related entities are loaded and exposed:
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    join: {
+      company: {
+        exclude: ['description'],
+      },
+      'company.projects': {
+        alias: 'pr',
+        exclude: ['description'],
+      },
+      profile: {
+        eager: true,
+        exclude: ['updatedAt'],
+      },
+    },
+  },
+})
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/users/users.controller.ts:31-43`:
+
+```typescript
+join: {
+  company: {
+    exclude: ['description'],
+  },
+  'company.projects': {
+    alias: 'pr',
+    exclude: ['description'],
+  },
+  profile: {
+    eager: true,
+    exclude: ['updatedAt'],
+  },
+},
+```
+
+### Join options
+
+- `alias` - SQL alias for the joined table
+- `allow` - Fields that can be selected from the relation
+- `exclude` - Fields to hide from the relation
+- `eager` - Auto-load the relation on every request
+- `select` - Set to `false` to disable selecting fields (join only for filtering)
+- `required` - Use `INNER JOIN` instead of `LEFT JOIN`
+- `persist` - Fields always included in the response
+
+<Note>
+Eager joins are loaded automatically even if not requested. Use sparingly to avoid performance issues.
+</Note>
+
+## Path parameters
+
+Define route parameters for nested resources:
+
+```typescript
+@Crud({
+  model: { type: User },
+  params: {
+    companyId: {
+      field: 'companyId',
+      type: 'number',
+    },
+    id: {
+      field: 'id',
+      type: 'number',
+      primary: true,
+    },
+  },
+})
+@Controller('/companies/:companyId/users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+This creates routes like:
+- `GET /companies/1/users` - Get all users for company 1
+- `GET /companies/1/users/5` - Get user 5 from company 1
+- `POST /companies/1/users` - Create user in company 1
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/users/users.controller.ts:18-28`:
+
+### Parameter options
+
+- `field` - Entity field to filter by
+- `type` - Parameter type (`'number'`, `'uuid'`, `'string'`)
+- `primary` - Whether this is the primary key
+- `disabled` - Exclude from route generation
+
+### UUID parameters
+
+For entities with UUID primary keys:
+
+```typescript
+@Crud({
+  model: { type: Device },
+  params: {
+    deviceKey: {
+      field: 'deviceKey',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+})
+@Controller('/devices')
+export class DevicesController {
+  constructor(public service: DevicesService) {}
+}
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/devices/devices.controller.ts:12-18`:
+
+## Overriding routes
+
+Customize generated route handlers using the `@Override()` decorator:
+
+```typescript
+import {
+  Crud,
+  CrudController,
+  CrudRequest,
+  ParsedRequest,
+  Override,
+} from '@nestjsx/crud';
+
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UsersController implements CrudController<User> {
+  constructor(public service: UsersService) {}
+
+  get base(): CrudController<User> {
+    return this;
+  }
+
+  @Override('getManyBase')
+  getAll(@ParsedRequest() req: CrudRequest) {
+    // Add custom logic before calling base method
+    console.log('Fetching users...');
+    return this.base.getManyBase(req);
+  }
+}
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/users/users.controller.ts:55-58`:
+
+```typescript
+@Override('getManyBase')
+getAll(@ParsedRequest() req: CrudRequest) {
+  return this.base.getManyBase(req);
+}
+```
+
+### Available route names
+
+- `getManyBase` - GET collection
+- `getOneBase` - GET single resource
+- `createOneBase` - POST single resource
+- `createManyBase` - POST bulk resources
+- `updateOneBase` - PATCH resource
+- `replaceOneBase` - PUT resource
+- `deleteOneBase` - DELETE resource
+- `recoverOneBase` - PATCH recover soft-deleted resource
+
+<Tip>
+Implement the `CrudController<T>` interface to get TypeScript autocomplete for route method names and signatures.
+</Tip>
+
+## Swagger integration
+
+The framework automatically generates Swagger/OpenAPI documentation. Enhance it with `@ApiTags()`:
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { Crud } from '@nestjsx/crud';
+
+@Crud({
+  model: { type: Company },
+})
+@ApiTags('companies')
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/companies/companies.controller.ts:45-49`:
+
+## Complete example
+
+Here's a full-featured controller with all options:
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { Crud } from '@nestjsx/crud';
+import { Company } from './company.entity';
+import { CompaniesService } from './companies.service';
+import { serialize } from './responses';
+
+@Crud({
+  model: {
+    type: Company,
+  },
+  serialize,
+  routes: {
+    deleteOneBase: {
+      returnDeleted: false,
+    },
+  },
+  query: {
+    alwaysPaginate: false,
+    softDelete: true,
+    allow: ['name'],
+    join: {
+      users: {
+        alias: 'companyUsers',
+        exclude: ['email'],
+        eager: true,
+      },
+      'users.projects': {
+        eager: true,
+        alias: 'usersProjects',
+        allow: ['name'],
+      },
+      'users.projects.company': {
+        eager: true,
+        alias: 'usersProjectsCompany',
+      },
+      projects: {
+        eager: true,
+        select: false,
+      },
+    },
+  },
+})
+@ApiTags('companies')
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/companies/companies.controller.ts:1-50`:
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Services" icon="database" href="/concepts/services">
+    Learn how to implement CRUD services
+  </Card>
+  <Card title="Requests" icon="search" href="/concepts/requests">
+    Understand request parsing and filtering
+  </Card>
+</CardGroup>

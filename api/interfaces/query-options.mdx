@@ -1,0 +1,364 @@
+---
+title: QueryOptions
+description: Configure query behavior, filtering, joins, and pagination
+---
+
+The `QueryOptions` interface allows you to configure how queries are processed, including field selection, filtering, joins, sorting, and pagination.
+
+## Interface Definition
+
+```typescript
+export interface QueryOptions {
+  allow?: QueryFields;
+  exclude?: QueryFields;
+  persist?: QueryFields;
+  filter?: QueryFilterOption;
+  join?: JoinOptions;
+  sort?: QuerySort[];
+  limit?: number;
+  maxLimit?: number;
+  cache?: number | false;
+  alwaysPaginate?: boolean;
+  softDelete?: boolean;
+}
+```
+
+## Properties
+
+<ParamField path="allow" type="QueryFields">
+  Array of field names that are allowed to be selected, filtered, or sorted by the client.
+  
+  ```typescript
+  allow: ['id', 'name', 'email', 'createdAt']
+  ```
+  
+  Only these fields can be used in query parameters like `?fields=name,email` or `?filter=name||$eq||John`.
+</ParamField>
+
+<ParamField path="exclude" type="QueryFields">
+  Array of field names that should be excluded from queries.
+  
+  ```typescript
+  exclude: ['password', 'secret', 'internalId']
+  ```
+  
+  These fields cannot be queried by clients and will not appear in responses.
+</ParamField>
+
+<ParamField path="persist" type="QueryFields">
+  Array of field names that should always be included in the response, even if not requested.
+  
+  ```typescript
+  persist: ['id', 'createdAt', 'updatedAt']
+  ```
+  
+  These fields will always be selected regardless of the `?fields=` query parameter.
+</ParamField>
+
+<ParamField path="filter" type="QueryFilterOption">
+  Server-side filter that is always applied to queries.
+  
+  Can be:
+  - `QueryFilter[]`: Array of filter conditions
+  - `SCondition`: A condition object from `@nestjsx/crud-request`
+  - `QueryFilterFunction`: A function that returns a condition
+  
+  ```typescript
+  filter: { isActive: true }
+  // or
+  filter: (search, getMany) => ({ userId: req.user.id })
+  ```
+</ParamField>
+
+<ParamField path="join" type="JoinOptions">
+  Configuration for relation joins.
+  
+  See [JoinOptions](#joinoptions) below for details.
+  
+  ```typescript
+  join: {
+    profile: { eager: true, allow: ['name', 'avatar'] },
+    posts: { alias: 'p' }
+  }
+  ```
+</ParamField>
+
+<ParamField path="sort" type="QuerySort[]">
+  Default sorting to apply when no sort is specified in the query.
+  
+  ```typescript
+  sort: [{ field: 'createdAt', order: 'DESC' }]
+  ```
+</ParamField>
+
+<ParamField path="limit" type="number">
+  Default number of records to return per page.
+  
+  ```typescript
+  limit: 25
+  ```
+  
+  Clients can override this with `?limit=` query parameter, up to `maxLimit`.
+</ParamField>
+
+<ParamField path="maxLimit" type="number">
+  Maximum number of records that can be requested per page.
+  
+  ```typescript
+  maxLimit: 100
+  ```
+  
+  If a client requests more than this, it will be capped to `maxLimit`.
+</ParamField>
+
+<ParamField path="cache" type="number | false">
+  Cache duration in milliseconds, or `false` to disable caching.
+  
+  ```typescript
+  cache: 2000 // Cache for 2 seconds
+  // or
+  cache: false // Disable caching
+  ```
+</ParamField>
+
+<ParamField path="alwaysPaginate" type="boolean">
+  If `true`, responses are always paginated even when no limit is specified.
+  
+  ```typescript
+  alwaysPaginate: true
+  ```
+  
+  Returns responses in format: `{ data: [...], count: 10, total: 100, page: 1, pageCount: 10 }`
+</ParamField>
+
+<ParamField path="softDelete" type="boolean">
+  If `true`, enables soft delete functionality.
+  
+  ```typescript
+  softDelete: true
+  ```
+  
+  Requires your entity to have a `deletedAt` column. Soft-deleted records are excluded from queries by default.
+</ParamField>
+
+## JoinOptions
+
+The `JoinOptions` interface configures relation joins:
+
+```typescript
+export interface JoinOptions {
+  [key: string]: JoinOption;
+}
+
+export interface JoinOption {
+  alias?: string;
+  allow?: QueryFields;
+  eager?: boolean;
+  exclude?: QueryFields;
+  persist?: QueryFields;
+  select?: false;
+  required?: boolean;
+}
+```
+
+<ParamField path="alias" type="string">
+  SQL alias for the joined relation.
+  
+  ```typescript
+  join: { profile: { alias: 'p' } }
+  ```
+</ParamField>
+
+<ParamField path="allow" type="QueryFields">
+  Fields from the joined relation that clients can query.
+  
+  ```typescript
+  join: { profile: { allow: ['name', 'avatar', 'bio'] } }
+  ```
+</ParamField>
+
+<ParamField path="eager" type="boolean">
+  If `true`, this relation is always loaded without requiring `?join=relationName` in the query.
+  
+  ```typescript
+  join: { profile: { eager: true } }
+  ```
+</ParamField>
+
+<ParamField path="exclude" type="QueryFields">
+  Fields from the joined relation that should never be exposed.
+  
+  ```typescript
+  join: { profile: { exclude: ['internalNotes'] } }
+  ```
+</ParamField>
+
+<ParamField path="persist" type="QueryFields">
+  Fields from the joined relation that are always selected.
+  
+  ```typescript
+  join: { profile: { persist: ['id', 'name'] } }
+  ```
+</ParamField>
+
+<ParamField path="select" type="false">
+  If set to `false`, prevents selecting fields from this relation.
+  
+  ```typescript
+  join: { profile: { select: false } }
+  ```
+  
+  The relation can still be used for filtering but won't be included in responses.
+</ParamField>
+
+<ParamField path="required" type="boolean">
+  If `true`, uses INNER JOIN instead of LEFT JOIN.
+  
+  ```typescript
+  join: { profile: { required: true } }
+  ```
+  
+  Only returns records that have this relation.
+</ParamField>
+
+## Usage Examples
+
+### Basic Query Configuration
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    limit: 25,
+    maxLimit: 100,
+    alwaysPaginate: true,
+    allow: ['id', 'name', 'email', 'createdAt'],
+    exclude: ['password', 'secret'],
+    persist: ['id'],
+  },
+})
+@Controller('users')
+export class UsersController {}
+```
+
+### Join Relations
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    join: {
+      profile: {
+        eager: true,
+        allow: ['name', 'avatar', 'bio'],
+      },
+      posts: {
+        alias: 'p',
+        allow: ['title', 'content', 'publishedAt'],
+      },
+      company: {
+        required: true,
+        allow: ['name'],
+      },
+    },
+  },
+})
+@Controller('users')
+export class UsersController {}
+```
+
+### Server-Side Filtering
+
+```typescript
+@Crud({
+  model: { type: Post },
+  query: {
+    // Only show published posts
+    filter: { published: true },
+  },
+})
+@Controller('posts')
+export class PostsController {}
+```
+
+### Dynamic Filtering with Function
+
+```typescript
+@Crud({
+  model: { type: Post },
+  query: {
+    filter: (search, getMany) => {
+      // Only show posts owned by the current user
+      return { userId: req.user.id };
+    },
+  },
+})
+@Controller('posts')
+export class PostsController {}
+```
+
+### Soft Delete Support
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+  },
+})
+@Controller('users')
+export class UsersController {}
+```
+
+### Default Sorting and Caching
+
+```typescript
+@Crud({
+  model: { type: Article },
+  query: {
+    sort: [{ field: 'publishedAt', order: 'DESC' }],
+    cache: 5000, // Cache for 5 seconds
+  },
+})
+@Controller('articles')
+export class ArticlesController {}
+```
+
+## Notes
+
+<Note>
+  The `allow` and `exclude` options work together. If both are specified, `exclude` takes precedence. It's generally better to use one or the other for clarity.
+</Note>
+
+<Warning>
+  When using `eager: true` on relations, be mindful of performance implications. Eager loading always fetches the relation data, which can slow down queries if the relation contains many records.
+</Warning>
+
+<Expandable title="QueryFields Type">
+  `QueryFields` is typically an array of strings representing field names:
+  
+  ```typescript
+  type QueryFields = string[];
+  ```
+  
+  You can specify nested fields using dot notation:
+  
+  ```typescript
+  allow: ['id', 'profile.name', 'posts.title']
+  ```
+</Expandable>
+
+<Expandable title="Query Filter Function Signature">
+  The `QueryFilterFunction` type has the following signature:
+  
+  ```typescript
+  type QueryFilterFunction = (
+    search?: SCondition,
+    getMany?: boolean,
+  ) => SCondition | void;
+  ```
+  
+  - `search`: The search condition from the client query
+  - `getMany`: `true` for list queries, `false` for single-record queries
+  - Returns: A condition object to merge with the query, or `void` for no additional filtering
+</Expandable>

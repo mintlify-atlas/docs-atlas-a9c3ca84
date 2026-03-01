@@ -1,0 +1,319 @@
+---
+title: '@ParsedRequest'
+description: 'Parameter decorator to inject the parsed CRUD request into controller methods'
+---
+
+## Overview
+
+The `@ParsedRequest` decorator is a parameter decorator that injects the parsed CRUD request object into your controller method parameters. It provides access to parsed query parameters, filters, joins, pagination settings, and more.
+
+## Signature
+
+```typescript
+export const ParsedRequest = createParamDecorator(
+  (_, ctx): ParameterDecorator => {
+    return R.getContextRequest(ctx)[PARSED_CRUD_REQUEST_KEY];
+  },
+);
+```
+
+## Returns
+
+<ParamField path="CrudRequest" type="CrudRequest">
+  The parsed CRUD request object
+
+  <ParamField path="parsed" type="ParsedRequestParams">
+    Parsed request parameters including:
+    - `fields` - Selected fields
+    - `paramsFilter` - URL parameter filters
+    - `search` - Search conditions
+    - `filter` - Query filters
+    - `or` - OR conditions
+    - `join` - Relation joins
+    - `sort` - Sort configuration
+    - `limit` - Pagination limit
+    - `offset` - Pagination offset
+    - `page` - Current page number
+    - `cache` - Cache settings
+  </ParamField>
+
+  <ParamField path="options" type="CrudRequestOptions">
+    Request options including query, routes, and params configuration
+  </ParamField>
+</ParamField>
+
+## Usage
+
+### Basic Usage
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud, Override, ParsedRequest, CrudRequest } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UserService } from './user.service';
+
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+
+  @Override()
+  async getMany(@ParsedRequest() req: CrudRequest) {
+    console.log('Parsed filters:', req.parsed.filter);
+    console.log('Pagination:', { limit: req.parsed.limit, offset: req.parsed.offset });
+    
+    return this.service.getMany(req);
+  }
+}
+```
+
+### Accessing Query Parameters
+
+```typescript
+@Crud({
+  model: { type: Post },
+})
+@Controller('posts')
+export class PostController {
+  constructor(public service: PostService) {}
+
+  @Override('getManyBase')
+  async getPosts(@ParsedRequest() req: CrudRequest) {
+    // Access parsed query parameters
+    const { filter, sort, limit, page } = req.parsed;
+    
+    console.log('Filters applied:', filter);
+    console.log('Sort order:', sort);
+    console.log('Results per page:', limit);
+    console.log('Current page:', page);
+    
+    return this.service.getMany(req);
+  }
+}
+```
+
+### Using with URL Parameters
+
+```typescript
+@Crud({
+  model: { type: Comment },
+  params: {
+    postId: {
+      field: 'postId',
+      type: 'number',
+    },
+  },
+})
+@Controller('posts/:postId/comments')
+export class CommentController {
+  constructor(public service: CommentService) {}
+
+  @Override()
+  async getMany(@ParsedRequest() req: CrudRequest) {
+    // Access URL parameters from paramsFilter
+    const postId = req.parsed.paramsFilter.find(f => f.field === 'postId')?.value;
+    console.log('Getting comments for post:', postId);
+    
+    return this.service.getMany(req);
+  }
+}
+```
+
+### Inspecting Joins
+
+```typescript
+@Crud({
+  model: { type: Order },
+  query: {
+    join: {
+      customer: { eager: true },
+      items: { eager: false },
+    },
+  },
+})
+@Controller('orders')
+export class OrderController {
+  constructor(public service: OrderService) {}
+
+  @Override()
+  async getOne(@ParsedRequest() req: CrudRequest) {
+    // Check which relations are being loaded
+    console.log('Joins requested:', req.parsed.join);
+    
+    const order = await this.service.getOne(req);
+    
+    // Add custom processing based on loaded relations
+    if (req.parsed.join?.some(j => j.field === 'items')) {
+      order.totalItems = order.items.length;
+    }
+    
+    return order;
+  }
+}
+```
+
+### Modifying Request Before Processing
+
+```typescript
+@Crud({
+  model: { type: Product },
+})
+@Controller('products')
+export class ProductController implements CrudController<Product> {
+  constructor(public service: ProductService) {}
+
+  get base(): CrudController<Product> {
+    return this;
+  }
+
+  @Override()
+  async getMany(@ParsedRequest() req: CrudRequest) {
+    // Add additional filters programmatically
+    if (!req.parsed.filter) {
+      req.parsed.filter = [];
+    }
+    
+    req.parsed.filter.push({
+      field: 'isActive',
+      operator: '$eq',
+      value: true,
+    });
+    
+    return this.base.getManyBase(req);
+  }
+}
+```
+
+### Using in Create/Update Operations
+
+```typescript
+@Crud({
+  model: { type: Article },
+})
+@Controller('articles')
+export class ArticleController implements CrudController<Article> {
+  constructor(public service: ArticleService) {}
+
+  get base(): CrudController<Article> {
+    return this;
+  }
+
+  @Override()
+  async createOne(
+    @ParsedRequest() req: CrudRequest,
+    @ParsedBody() dto: Article,
+    @Request() request
+  ) {
+    // Access request options
+    console.log('Request options:', req.options);
+    
+    // Add metadata
+    dto.authorId = request.user.id;
+    dto.createdAt = new Date();
+    
+    return this.base.createOneBase(req, dto);
+  }
+}
+```
+
+### Complete Integration Test Example
+
+From the source tests:
+
+```typescript packages/crud/test/crud.decorator.override.spec.ts:48-56
+@Override()
+getMany(@ParsedRequest() req: CrudRequest) {
+  return { foo: 'bar' };
+}
+
+@Override('createManyBase')
+createBulk(@ParsedBody() dto: CreateManyDto<TestModel>, @ParsedRequest() req: CrudRequest) {
+  return this.base.createManyBase(req, dto);
+}
+```
+
+### Standalone Usage with Interceptor
+
+```typescript
+import { Get, Controller, UseInterceptors } from '@nestjs/common';
+import { CrudRequestInterceptor, ParsedRequest, CrudRequest } from '@nestjsx/crud';
+
+@Controller('custom')
+export class CustomController {
+  @Get()
+  @UseInterceptors(CrudRequestInterceptor)
+  async getData(@ParsedRequest() req: CrudRequest) {
+    // Use ParsedRequest outside of @Crud decorator
+    console.log('Parsed request:', req.parsed);
+    return { message: 'Custom endpoint with CRUD request parsing' };
+  }
+}
+```
+
+## Implementation Details
+
+```typescript packages/crud/src/decorators/parsed-request.decorator.ts:6-10
+export const ParsedRequest = createParamDecorator(
+  (_, ctx): ParameterDecorator => {
+    return R.getContextRequest(ctx)[PARSED_CRUD_REQUEST_KEY];
+  },
+);
+```
+
+The decorator is built using NestJS's `createParamDecorator` and extracts the parsed request from the execution context.
+
+<Note>
+  The `@ParsedRequest` decorator automatically works with routes generated by `@Crud`. For custom routes, use `@UseInterceptors(CrudRequestInterceptor)` to enable request parsing.
+</Note>
+
+<Warning>
+  The parsed request object is read-only in most scenarios. While you can modify it in your code, changes may not affect the underlying query execution depending on when the service method is called.
+</Warning>
+
+## Request Structure
+
+Typical parsed request structure:
+
+```typescript
+{
+  parsed: {
+    fields: ['id', 'name', 'email'],
+    paramsFilter: [
+      { field: 'id', operator: '$eq', value: 1 }
+    ],
+    search: {
+      $and: [
+        { name: { $contL: 'john' } }
+      ]
+    },
+    filter: [
+      { field: 'isActive', operator: '$eq', value: true }
+    ],
+    or: [],
+    join: [
+      { field: 'profile', select: ['firstName', 'lastName'] }
+    ],
+    sort: [
+      { field: 'createdAt', order: 'DESC' }
+    ],
+    limit: 10,
+    offset: 0,
+    page: 1,
+    cache: 0
+  },
+  options: {
+    query: { /* query options */ },
+    routes: { /* routes options */ },
+    params: { /* params options */ }
+  }
+}
+```
+
+## See Also
+
+- [@Override](/api/decorators/override) - Override CRUD routes
+- [@ParsedBody](/api/decorators/parsed-body) - Access parsed request body
+- [@Crud](/api/decorators/crud) - Main CRUD decorator
+- [Query Parameters](/requests/query-params) - Understanding query syntax

@@ -1,0 +1,295 @@
+---
+title: '@Crud'
+description: 'Class decorator that generates RESTful CRUD endpoints for a controller'
+---
+
+## Overview
+
+The `@Crud` decorator is a class decorator that automatically generates RESTful CRUD endpoints for your NestJS controller. It provides a complete set of routes for Create, Read, Update, and Delete operations with extensive customization options.
+
+## Signature
+
+```typescript
+export const Crud = (options: CrudOptions) => (target: unknown): void
+```
+
+## Parameters
+
+<ParamField path="options" type="CrudOptions" required>
+  Configuration object for CRUD operations
+
+  <ParamField path="model" type="ModelOptions" required>
+    Model configuration
+    
+    <ParamField path="type" type="any" required>
+      The entity class/type to use for CRUD operations
+    </ParamField>
+  </ParamField>
+
+  <ParamField path="dto" type="DtoOptions">
+    Data Transfer Object configuration for create and update operations
+  </ParamField>
+
+  <ParamField path="serialize" type="SerializeOptions">
+    Serialization options for responses
+  </ParamField>
+
+  <ParamField path="query" type="QueryOptions">
+    Query configuration options
+    
+    <ParamField path="allow" type="QueryFields">
+      Fields allowed in queries
+    </ParamField>
+    
+    <ParamField path="exclude" type="QueryFields">
+      Fields excluded from queries
+    </ParamField>
+    
+    <ParamField path="persist" type="QueryFields">
+      Fields to persist in all queries
+    </ParamField>
+    
+    <ParamField path="filter" type="QueryFilterOption">
+      Default filter conditions
+    </ParamField>
+    
+    <ParamField path="join" type="JoinOptions">
+      Relation join options
+    </ParamField>
+    
+    <ParamField path="sort" type="QuerySort[]">
+      Default sort configuration
+    </ParamField>
+    
+    <ParamField path="limit" type="number">
+      Default limit for pagination
+    </ParamField>
+    
+    <ParamField path="maxLimit" type="number">
+      Maximum allowed limit
+    </ParamField>
+    
+    <ParamField path="cache" type="number | false">
+      Cache duration in milliseconds, or false to disable
+    </ParamField>
+    
+    <ParamField path="alwaysPaginate" type="boolean">
+      Always return paginated responses
+    </ParamField>
+    
+    <ParamField path="softDelete" type="boolean">
+      Enable soft delete functionality
+    </ParamField>
+  </ParamField>
+
+  <ParamField path="routes" type="RoutesOptions">
+    Route-specific configuration
+    
+    <ParamField path="exclude" type="BaseRouteName[]">
+      Routes to exclude from generation. Available routes: `getManyBase`, `getOneBase`, `createOneBase`, `createManyBase`, `updateOneBase`, `replaceOneBase`, `deleteOneBase`, `recoverOneBase`
+    </ParamField>
+    
+    <ParamField path="only" type="BaseRouteName[]">
+      Only generate these routes
+    </ParamField>
+    
+    <ParamField path="getManyBase" type="GetManyRouteOptions">
+      Options for the get many route
+    </ParamField>
+    
+    <ParamField path="getOneBase" type="GetOneRouteOptions">
+      Options for the get one route
+    </ParamField>
+    
+    <ParamField path="createOneBase" type="CreateOneRouteOptions">
+      Options for the create one route
+    </ParamField>
+    
+    <ParamField path="createManyBase" type="CreateManyRouteOptions">
+      Options for the create many route
+    </ParamField>
+    
+    <ParamField path="updateOneBase" type="UpdateOneRouteOptions">
+      Options for the update one route
+    </ParamField>
+    
+    <ParamField path="replaceOneBase" type="ReplaceOneRouteOptions">
+      Options for the replace one route
+    </ParamField>
+    
+    <ParamField path="deleteOneBase" type="DeleteOneRouteOptions">
+      Options for the delete one route
+    </ParamField>
+    
+    <ParamField path="recoverOneBase" type="RecoverOneRouteOptions">
+      Options for the recover one route (soft delete)
+    </ParamField>
+  </ParamField>
+
+  <ParamField path="params" type="ParamsOptions">
+    URL parameter configuration
+    
+    Each key is the parameter name, and the value is a ParamOption object with:
+    
+    <ParamField path="field" type="string">
+      Entity field name to map to
+    </ParamField>
+    
+    <ParamField path="type" type="ParamOptionType">
+      Parameter type (e.g., 'number', 'string', 'uuid')
+    </ParamField>
+    
+    <ParamField path="enum" type="SwaggerEnumType">
+      Enum type for parameter validation
+    </ParamField>
+    
+    <ParamField path="primary" type="boolean">
+      Whether this is a primary key parameter
+    </ParamField>
+    
+    <ParamField path="disabled" type="boolean">
+      Disable this parameter
+    </ParamField>
+  </ParamField>
+
+  <ParamField path="routesFactory" type="typeof CrudRoutesFactory">
+    Custom routes factory class for advanced customization
+  </ParamField>
+
+  <ParamField path="validation" type="ValidationPipeOptions | false">
+    Validation pipe options, or false to disable validation
+  </ParamField>
+</ParamField>
+
+## Usage
+
+### Basic Example
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UserService } from './user.service';
+
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+}
+```
+
+This generates the following endpoints:
+- `GET /users` - Get many users
+- `GET /users/:id` - Get one user
+- `POST /users` - Create one user
+- `POST /users/bulk` - Create many users
+- `PATCH /users/:id` - Update one user
+- `PUT /users/:id` - Replace one user
+- `DELETE /users/:id` - Delete one user
+
+### Advanced Configuration
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    limit: 10,
+    maxLimit: 100,
+    alwaysPaginate: true,
+    sort: [{ field: 'createdAt', order: 'DESC' }],
+    join: {
+      profile: {
+        eager: true,
+        allow: ['firstName', 'lastName'],
+      },
+      posts: {
+        alias: 'userPosts',
+      },
+    },
+  },
+  routes: {
+    exclude: ['createManyBase', 'replaceOneBase'],
+    deleteOneBase: {
+      returnDeleted: true,
+    },
+  },
+  params: {
+    id: {
+      field: 'id',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+}
+```
+
+### With Custom Parameters
+
+```typescript
+@Crud({
+  model: { type: Post },
+  params: {
+    userId: {
+      field: 'userId',
+      type: 'number',
+    },
+    status: {
+      field: 'status',
+      type: 'string',
+      enum: PostStatus,
+    },
+  },
+})
+@Controller('users/:userId/posts/:status')
+export class PostController {
+  constructor(public service: PostService) {}
+}
+```
+
+## Generated Routes
+
+The decorator automatically generates the following base routes:
+
+| Route Name | HTTP Method | Path | Description |
+|------------|-------------|------|-------------|
+| `getManyBase` | GET | `/` | Retrieve multiple entities |
+| `getOneBase` | GET | `/:id` | Retrieve single entity |
+| `createOneBase` | POST | `/` | Create single entity |
+| `createManyBase` | POST | `/bulk` | Create multiple entities |
+| `updateOneBase` | PATCH | `/:id` | Update single entity |
+| `replaceOneBase` | PUT | `/:id` | Replace single entity |
+| `deleteOneBase` | DELETE | `/:id` | Delete single entity |
+| `recoverOneBase` | PATCH | `/:id/recover` | Recover soft-deleted entity |
+
+<Note>
+  The `recoverOneBase` route is only generated when `query.softDelete` is enabled.
+</Note>
+
+## Implementation Details
+
+The decorator uses a routes factory pattern to generate the endpoints. The source code shows:
+
+```typescript packages/crud/src/decorators/crud.decorator.ts:4-9
+export const Crud =
+  (options: CrudOptions) =>
+  (target: unknown): void => {
+    const factoryMethod = options.routesFactory || CrudRoutesFactory;
+    const factory = new factoryMethod(target, options);
+  };
+```
+
+<Warning>
+  The controller must have a `service` property that implements the CRUD service interface. This service is used by the generated routes to perform database operations.
+</Warning>
+
+## See Also
+
+- [@CrudAuth](/api/decorators/crud-auth) - Add authentication and authorization
+- [@Override](/api/decorators/override) - Override generated routes
+- [@ParsedRequest](/api/decorators/parsed-request) - Access parsed request data

@@ -1,0 +1,492 @@
+---
+title: "Validation"
+description: "Configure automatic request validation with class-validator integration"
+---
+
+NestJS CRUD automatically validates request bodies using NestJS `ValidationPipe` and `class-validator` decorators.
+
+## Overview
+
+Validation is enabled by default when you have `class-validator` and `class-transformer` installed. The framework uses:
+
+- **DTOs**: Custom DTO classes you provide
+- **Entity classes**: With validation groups when no DTO is specified
+- **ValidationPipe**: NestJS validation pipe with customizable options
+
+## Basic validation setup
+
+### Using DTOs
+
+Create DTO classes with validation decorators:
+
+```typescript CreateUserDto.ts
+import { IsString, IsEmail, IsNotEmpty, MaxLength } from 'class-validator';
+
+export class CreateUserDto {
+  @IsNotEmpty()
+  @IsString()
+  @IsEmail()
+  @MaxLength(255)
+  email: string;
+  
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(100)
+  firstName: string;
+  
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(100)
+  lastName: string;
+}
+```
+
+Register the DTO in your CRUD configuration:
+
+```typescript
+import { CreateUserDto, UpdateUserDto } from './dto';
+
+@Crud({
+  model: { type: User },
+  dto: {
+    create: CreateUserDto,
+    update: UpdateUserDto,
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+### Using entity validation groups
+
+If you don't provide DTOs, you can use validation groups directly on your entity:
+
+```typescript User.entity.ts
+import { Entity, Column } from 'typeorm';
+import { IsString, IsEmail, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
+import { CrudValidationGroups } from '@nestjsx/crud';
+
+const { CREATE, UPDATE } = CrudValidationGroups;
+
+@Entity('users')
+export class User {
+  @IsOptional({ groups: [UPDATE] })
+  @IsNotEmpty({ groups: [CREATE] })
+  @IsString({ always: true })
+  @IsEmail({}, { always: true })
+  @MaxLength(255, { always: true })
+  @Column({ type: 'varchar', length: 255 })
+  email: string;
+  
+  @IsOptional({ groups: [UPDATE] })
+  @IsNotEmpty({ groups: [CREATE] })
+  @IsString({ always: true })
+  @MaxLength(100, { always: true })
+  @Column({ type: 'varchar', length: 100 })
+  firstName: string;
+}
+```
+
+## Validation groups
+
+NestJS CRUD defines two validation groups:
+
+```typescript
+enum CrudValidationGroups {
+  CREATE = 'CRUD-CREATE',
+  UPDATE = 'CRUD-UPDATE',
+}
+```
+
+### How groups work
+
+- **CREATE group**: Applied to POST (create) operations
+- **UPDATE group**: Applied to PATCH (update) operations
+- **always: true**: Validation applies to all operations
+
+```typescript
+import { CrudValidationGroups } from '@nestjsx/crud';
+
+const { CREATE, UPDATE } = CrudValidationGroups;
+
+@Entity()
+export class User {
+  // Required on create, optional on update
+  @IsOptional({ groups: [UPDATE] })
+  @IsNotEmpty({ groups: [CREATE] })
+  @IsString({ always: true })
+  email: string;
+  
+  // Always validated
+  @IsBoolean({ always: true })
+  isActive: boolean;
+}
+```
+
+## Configuring ValidationPipe
+
+Customize validation behavior using the `validation` option:
+
+```typescript
+@Crud({
+  model: { type: User },
+  validation: {
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    transformOptions: {
+      enableImplicitConversion: true,
+    },
+  },
+})
+```
+
+### Common ValidationPipe options
+
+<ParamField path="whitelist" type="boolean" default={false}>
+  Strip properties that don't have any decorators.
+</ParamField>
+
+<ParamField path="forbidNonWhitelisted" type="boolean" default={false}>
+  Throw an error if non-whitelisted properties are present.
+</ParamField>
+
+<ParamField path="transform" type="boolean" default={false}>
+  Automatically transform payloads to DTO instances.
+</ParamField>
+
+<ParamField path="transformOptions" type="ClassTransformOptions">
+  Options for class-transformer.
+</ParamField>
+
+<ParamField path="skipMissingProperties" type="boolean" default={false}>
+  Skip validation of properties that are not in the payload.
+</ParamField>
+
+<ParamField path="forbidUnknownValues" type="boolean" default={true}>
+  Throw an error if unknown objects are validated.
+</ParamField>
+
+<ParamField path="errorHttpStatusCode" type="number" default={400}>
+  HTTP status code to use on validation errors.
+</ParamField>
+
+### Recommended configuration
+
+```typescript
+@Crud({
+  model: { type: User },
+  validation: {
+    whitelist: true,              // Remove extra properties
+    forbidNonWhitelisted: true,   // Reject unknown properties
+    transform: true,              // Auto-transform to DTO
+  },
+})
+```
+
+## Disabling validation
+
+Set `validation: false` to disable automatic validation:
+
+```typescript
+@Crud({
+  model: { type: User },
+  validation: false,
+})
+```
+
+<Warning>
+  Disabling validation removes automatic input sanitization. Make sure you handle validation manually if you disable it.
+</Warning>
+
+## Nested object validation
+
+Validate nested objects using `@ValidateNested()` and `@Type()`:
+
+```typescript
+import { ValidateNested, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class AddressDto {
+  @IsString()
+  street: string;
+  
+  @IsString()
+  city: string;
+  
+  @IsString()
+  country: string;
+}
+
+export class CreateUserDto {
+  @IsString()
+  name: string;
+  
+  @ValidateNested()
+  @Type(() => AddressDto)
+  address: AddressDto;
+}
+```
+
+From the entity example:
+
+```typescript
+export class Name {
+  @IsString({ always: true })
+  @Column({ nullable: true })
+  first: string;
+  
+  @IsString({ always: true })
+  @Column({ nullable: true })
+  last: string;
+}
+
+@Entity('users')
+export class User {
+  @ValidateNested({ always: true })
+  @Type(() => Name)
+  @Column(() => Name)
+  name: Name;
+}
+```
+
+## Bulk create validation
+
+Bulk create operations use a special DTO that validates an array:
+
+```typescript
+import { IsArray, ArrayNotEmpty, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class CreateManyUsersDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => CreateUserDto)
+  bulk: CreateUserDto[];
+}
+```
+
+<Note>
+  The framework automatically creates this bulk DTO when validation is enabled. You don't need to create it manually.
+</Note>
+
+## Validation error responses
+
+When validation fails, NestJS returns a 400 Bad Request with error details:
+
+```json
+{
+  "statusCode": 400,
+  "message": [
+    "email must be an email",
+    "email should not be empty",
+    "firstName must be shorter than or equal to 100 characters"
+  ],
+  "error": "Bad Request"
+}
+```
+
+## Custom validation decorators
+
+Create custom validators for business logic:
+
+```typescript
+import { registerDecorator, ValidationOptions, ValidationArguments } from 'class-validator';
+
+export function IsStrongPassword(validationOptions?: ValidationOptions) {
+  return function (object: Object, propertyName: string) {
+    registerDecorator({
+      name: 'isStrongPassword',
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: any, args: ValidationArguments) {
+          if (typeof value !== 'string') return false;
+          
+          // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
+          const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+          return strongRegex.test(value);
+        },
+        defaultMessage(args: ValidationArguments) {
+          return 'Password must be at least 8 characters with uppercase, lowercase, and number';
+        },
+      },
+    });
+  };
+}
+
+// Usage
+export class CreateUserDto {
+  @IsNotEmpty()
+  @IsStrongPassword()
+  password: string;
+}
+```
+
+## Conditional validation
+
+Use `@ValidateIf()` for conditional validation:
+
+```typescript
+import { ValidateIf, IsNotEmpty } from 'class-validator';
+
+export class CreateUserDto {
+  @IsNotEmpty()
+  accountType: 'personal' | 'business';
+  
+  @ValidateIf(o => o.accountType === 'business')
+  @IsNotEmpty()
+  companyName?: string;
+  
+  @ValidateIf(o => o.accountType === 'business')
+  @IsNotEmpty()
+  taxId?: string;
+}
+```
+
+## Async validation
+
+Create async validators for database checks:
+
+```typescript
+import { registerDecorator, ValidationOptions, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+import { Injectable } from '@nestjs/common';
+import { UsersService } from './users.service';
+
+@ValidatorConstraint({ async: true })
+@Injectable()
+export class IsEmailUniqueConstraint implements ValidatorConstraintInterface {
+  constructor(private usersService: UsersService) {}
+  
+  async validate(email: string): Promise<boolean> {
+    const user = await this.usersService.findByEmail(email);
+    return !user;
+  }
+  
+  defaultMessage(): string {
+    return 'Email already exists';
+  }
+}
+
+export function IsEmailUnique(validationOptions?: ValidationOptions) {
+  return function (object: Object, propertyName: string) {
+    registerDecorator({
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      constraints: [],
+      validator: IsEmailUniqueConstraint,
+    });
+  };
+}
+
+// Usage
+export class CreateUserDto {
+  @IsEmail()
+  @IsEmailUnique()
+  email: string;
+}
+```
+
+<Note>
+  Remember to register async validator constraints as providers in your module.
+</Note>
+
+## Update vs Replace validation
+
+- **PATCH (update)**: Partial updates, fields are optional
+- **PUT (replace)**: Full replacement, typically requires all fields
+
+With validation groups:
+
+```typescript
+const { CREATE, UPDATE } = CrudValidationGroups;
+
+@Entity()
+export class User {
+  // Required for create and replace, optional for update
+  @IsOptional({ groups: [UPDATE] })
+  @IsNotEmpty({ groups: [CREATE] })
+  @IsEmail({ always: true })
+  email: string;
+}
+```
+
+With separate DTOs:
+
+```typescript
+// All fields required
+export class CreateUserDto {
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
+  
+  @IsNotEmpty()
+  firstName: string;
+}
+
+// All fields optional
+export class UpdateUserDto {
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+  
+  @IsOptional()
+  firstName?: string;
+}
+
+// All fields required
+export class ReplaceUserDto {
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
+  
+  @IsNotEmpty()
+  firstName: string;
+}
+```
+
+## Best practices
+
+<Accordion title="Always validate user input">
+  Never trust client data. Always use validation on create and update operations:
+  
+  ```typescript
+  validation: {
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }
+  ```
+</Accordion>
+
+<Accordion title="Use DTOs for complex validation">
+  For complex validation requirements, create dedicated DTO classes instead of relying on entity validation groups:
+  
+  ```typescript
+  dto: {
+    create: CreateUserDto,
+    update: UpdateUserDto,
+    replace: ReplaceUserDto,
+  }
+  ```
+</Accordion>
+
+<Accordion title="Separate DTOs from entities">
+  Keep validation DTOs separate from database entities for better separation of concerns and flexibility.
+</Accordion>
+
+<Accordion title="Document validation rules">
+  Use custom error messages to clearly communicate validation requirements:
+  
+  ```typescript
+  @MaxLength(100, {
+    message: 'Name must not exceed 100 characters',
+  })
+  name: string;
+  ```
+</Accordion>

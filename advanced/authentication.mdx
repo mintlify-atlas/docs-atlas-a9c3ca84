@@ -1,0 +1,344 @@
+---
+title: 'Authentication & Authorization'
+description: 'Secure your CRUD endpoints with authentication and fine-grained authorization'
+icon: 'shield-halved'
+---
+
+## Overview
+
+The `@CrudAuth()` decorator provides built-in authentication and authorization for CRUD operations. It allows you to filter queries, persist user data, and control access based on the authenticated user.
+
+## Basic Usage
+
+Apply the `@CrudAuth()` decorator to your controller:
+
+```typescript me.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud, CrudAuth } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: { type: User },
+  routes: {
+    only: ['getOneBase', 'updateOneBase'],
+  },
+})
+@CrudAuth({
+  filter: (user: User) => ({
+    id: user.id,
+  }),
+})
+@Controller('me')
+export class MeController {
+  constructor(public service: UsersService) {}
+}
+```
+
+This ensures users can only access their own data.
+
+## Configuration Options
+
+The `@CrudAuth()` decorator accepts an `AuthOptions` object:
+
+### Filter
+
+Automatically filter queries based on the authenticated user:
+
+```typescript
+@CrudAuth({
+  filter: (user: User) => ({
+    userId: user.id,
+  }),
+})
+```
+
+The filter is applied to all read operations (`getMany`, `getOne`).
+
+### Persist
+
+Automatically add user data to create/update operations:
+
+```typescript my-projects.controller.ts
+@Crud({
+  model: { type: UserProject },
+})
+@CrudAuth({
+  filter: (user: User) => ({
+    userId: user.id,
+  }),
+  persist: (user: User) => ({
+    userId: user.id,
+  }),
+})
+@Controller('my-projects')
+export class MyProjectsController {
+  constructor(public service: UserProjectsService) {}
+}
+```
+
+The `persist` function automatically adds `userId` to all create and update requests.
+
+### OR Conditions
+
+Add OR conditions to your filters:
+
+```typescript
+@CrudAuth({
+  filter: (user: User) => ({
+    ownerId: user.id,
+  }),
+  or: (user: User) => ({
+    assignedTo: user.id,
+  }),
+})
+```
+
+This allows users to see records they own OR are assigned to.
+
+### Class Transform Options
+
+Customize serialization based on the user:
+
+```typescript
+@CrudAuth({
+  property: 'user',
+  classTransformOptions: (req) => ({
+    groups: req.user.isAdmin ? ['admin'] : ['user'],
+  }),
+})
+```
+
+### Groups
+
+Shorthand for setting serialization groups:
+
+```typescript
+@CrudAuth({
+  groups: (req) => {
+    return req.user.isAdmin ? ['admin', 'sensitive'] : ['user'];
+  },
+})
+```
+
+## Global Configuration
+
+Set global authentication settings in `main.ts`:
+
+```typescript main.ts
+import { CrudConfigService } from '@nestjsx/crud';
+
+CrudConfigService.load({
+  auth: {
+    property: 'user', // Default request property for user
+  },
+});
+```
+
+<Note>
+The `property` option specifies where to find the authenticated user on the request object (e.g., `req.user`).
+</Note>
+
+## Complete Example
+
+Here's a comprehensive authentication setup:
+
+```typescript projects.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud, CrudAuth } from '@nestjsx/crud';
+import { Project } from './project.entity';
+import { ProjectsService } from './projects.service';
+import { User } from '../users/user.entity';
+
+@Crud({
+  model: { type: Project },
+  query: {
+    join: {
+      users: {},
+      company: {},
+    },
+  },
+})
+@CrudAuth({
+  // Only show projects the user owns or is a member of
+  filter: (user: User) => ({
+    ownerId: user.id,
+  }),
+  or: (user: User) => ({
+    'users.id': user.id,
+  }),
+  
+  // Automatically set owner on create
+  persist: (user: User) => ({
+    ownerId: user.id,
+  }),
+  
+  // Custom serialization for admins
+  groups: (req) => {
+    return req.user.role === 'admin' 
+      ? ['admin', 'detailed'] 
+      : ['basic'];
+  },
+})
+@Controller('my-projects')
+export class MyProjectsController {
+  constructor(public service: ProjectsService) {}
+}
+```
+
+## Using with Guards
+
+Combine with NestJS guards for authentication:
+
+```typescript auth.guard.ts
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    // Your authentication logic here
+    // Set request.user if authenticated
+    return !!request.user;
+  }
+}
+```
+
+Apply globally:
+
+```typescript app.module.ts
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { AuthGuard } from './auth.guard';
+
+@Module({
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+## Multi-Tenancy Example
+
+Implement multi-tenancy with company-based filtering:
+
+```typescript users.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud, CrudAuth } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: { type: User },
+  params: {
+    companyId: {
+      field: 'companyId',
+      type: 'number',
+    },
+  },
+})
+@CrudAuth({
+  filter: (user: User) => ({
+    companyId: user.companyId,
+  }),
+  persist: (user: User) => ({
+    companyId: user.companyId,
+  }),
+})
+@Controller('/companies/:companyId/users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Advanced Filtering
+
+Use complex conditions in your filters:
+
+```typescript
+@CrudAuth({
+  filter: (user: User) => {
+    // Admins see everything
+    if (user.role === 'admin') {
+      return {};
+    }
+    
+    // Managers see their team's data
+    if (user.role === 'manager') {
+      return {
+        teamId: user.teamId,
+      };
+    }
+    
+    // Regular users see only their data
+    return {
+      userId: user.id,
+    };
+  },
+})
+```
+
+## Request Property
+
+Access the user from different request properties:
+
+```typescript
+@CrudAuth({
+  property: 'currentUser', // Use req.currentUser instead of req.user
+  filter: (user: User) => ({
+    id: user.id,
+  }),
+})
+```
+
+## Security Best Practices
+
+<Warning>
+Always validate and sanitize user input, even when using `@CrudAuth()`. The decorator filters data but doesn't prevent malicious requests.
+</Warning>
+
+<Steps>
+  <Step title="Always Use Guards">
+    Combine `@CrudAuth()` with authentication guards to ensure only authenticated users can access endpoints.
+  </Step>
+  
+  <Step title="Filter Sensitive Data">
+    Use the `filter` option to ensure users can only access their own data or data they're authorized to see.
+  </Step>
+  
+  <Step title="Validate Ownership">
+    For update and delete operations, ensure users can only modify resources they own.
+  </Step>
+  
+  <Step title="Use Serialization">
+    Combine with serialization to control which fields different user roles can see.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### User Not Found on Request
+
+If the user object is not found:
+
+1. Ensure your authentication guard sets `request.user`
+2. Verify the `property` configuration matches your setup
+3. Check that the guard executes before CRUD operations
+
+### Filters Not Applied
+
+If filters aren't working:
+
+1. Verify the filter function returns a valid condition object
+2. Check that field names match your entity properties
+3. Ensure the user object has the expected properties
+
+## Related Resources
+
+- [Global Configuration](/advanced/global-config) - Set global auth settings
+- [Serialization](/advanced/serialization) - Control response data based on user role
+- [Query Options](/api/interfaces/query-options) - Learn about query filtering

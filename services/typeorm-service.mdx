@@ -1,0 +1,438 @@
+---
+title: "TypeOrmCrudService"
+description: "A comprehensive service implementation for TypeORM that provides full CRUD operations with advanced querying capabilities"
+---
+
+## Overview
+
+The `TypeOrmCrudService` is a powerful service class that extends the abstract `CrudService` and provides complete CRUD functionality for TypeORM entities. It handles complex querying, filtering, sorting, pagination, and relation management out of the box.
+
+## Basic Usage
+
+The simplest way to use `TypeOrmCrudService` is to extend it in your service class:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { User } from './user.entity';
+
+@Injectable()
+export class UsersService extends TypeOrmCrudService<User> {
+  constructor(@InjectRepository(User) repo) {
+    super(repo);
+  }
+}
+```
+
+<Note>
+The `TypeOrmCrudService` automatically inherits all CRUD methods and doesn't require any additional configuration for basic operations.
+</Note>
+
+## Constructor
+
+<ParamField path="repo" type="Repository<T>" required>
+  The TypeORM repository instance for your entity. This is typically injected using `@InjectRepository(Entity)`.
+</ParamField>
+
+## Properties
+
+### Protected Properties
+
+<ParamField path="dbName" type="DataSourceOptions['type']">
+  The database type (e.g., 'postgres', 'mysql', 'mariadb'). Automatically detected from the repository connection.
+</ParamField>
+
+<ParamField path="entityColumns" type="string[]">
+  An array of all column names in the entity. Populated during initialization.
+</ParamField>
+
+<ParamField path="entityPrimaryColumns" type="string[]">
+  An array of primary key column names. Used for entity identification.
+</ParamField>
+
+<ParamField path="entityHasDeleteColumn" type="boolean">
+  Indicates whether the entity has a soft delete column. Enables soft delete functionality.
+</ParamField>
+
+<ParamField path="entityColumnsHash" type="ObjectLiteral">
+  A hash map of entity columns for quick lookup and SQL injection prevention.
+</ParamField>
+
+<ParamField path="entityRelationsHash" type="Map<string, IAllowedRelation>">
+  A cache of entity relations metadata for efficient join operations.
+</ParamField>
+
+## Public Methods
+
+### getMany
+
+Retrieves multiple entities based on the request parameters.
+
+```typescript
+public async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object containing parsed query parameters and options.
+</ParamField>
+
+<ResponseField name="return" type="GetManyDefaultResponse<T> | T[]">
+  Returns either a paginated response with metadata or a plain array of entities.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const result = await usersService.getMany(req);
+// With pagination:
+// { data: [...], count: 10, total: 100, page: 1, pageCount: 10 }
+// Without pagination:
+// [...]
+```
+
+### getOne
+
+Retrieves a single entity based on the request parameters.
+
+```typescript
+public async getOne(req: CrudRequest): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with search criteria.
+</ParamField>
+
+<ResponseField name="return" type="T">
+  Returns the found entity or throws a NotFoundException.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const user = await usersService.getOne(req);
+```
+
+### createOne
+
+Creates a single entity.
+
+```typescript
+public async createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with options.
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  The data transfer object containing the entity data to create.
+</ParamField>
+
+<ResponseField name="return" type="T">
+  Returns the created entity, either as a shallow object or fully populated based on the `returnShallow` option.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const newUser = await usersService.createOne(req, {
+  email: 'user@example.com',
+  name: 'John Doe'
+});
+```
+
+### createMany
+
+Creates multiple entities in bulk.
+
+```typescript
+public async createMany(req: CrudRequest, dto: CreateManyDto<T | Partial<T>>): Promise<T[]>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object.
+</ParamField>
+
+<ParamField path="dto" type="CreateManyDto<T | Partial<T>>" required>
+  An object with a `bulk` property containing an array of entities to create.
+</ParamField>
+
+<ResponseField name="return" type="T[]">
+  Returns an array of created entities.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const users = await usersService.createMany(req, {
+  bulk: [
+    { email: 'user1@example.com', name: 'User 1' },
+    { email: 'user2@example.com', name: 'User 2' }
+  ]
+});
+```
+
+<Note>
+Bulk creates are processed in chunks of 50 entities for optimal performance.
+</Note>
+
+### updateOne
+
+Updates a single entity.
+
+```typescript
+public async updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with entity identification.
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  Partial entity data to update.
+</ParamField>
+
+<ResponseField name="return" type="T">
+  Returns the updated entity.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const updatedUser = await usersService.updateOne(req, {
+  name: 'Jane Doe'
+});
+```
+
+<Warning>
+By default, path parameters cannot be overridden. Set `allowParamsOverride: true` in route options to change this behavior.
+</Warning>
+
+### replaceOne
+
+Replaces an entire entity (PUT operation).
+
+```typescript
+public async replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object.
+</ParamField>
+
+<ParamField path="dto" type="T | Partial<T>" required>
+  Complete entity data to replace.
+</ParamField>
+
+<ResponseField name="return" type="T">
+  Returns the replaced entity.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const replacedUser = await usersService.replaceOne(req, {
+  email: 'user@example.com',
+  name: 'John Smith',
+  age: 30
+});
+```
+
+### deleteOne
+
+Deletes a single entity.
+
+```typescript
+public async deleteOne(req: CrudRequest): Promise<void | T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object with entity identification.
+</ParamField>
+
+<ResponseField name="return" type="void | T">
+  Returns the deleted entity if `returnDeleted` is true, otherwise returns void.
+</ResponseField>
+
+**Example:**
+
+```typescript
+await usersService.deleteOne(req);
+```
+
+<Note>
+Supports both hard delete and soft delete. When soft delete is enabled, the entity is marked as deleted but not removed from the database.
+</Note>
+
+### recoverOne
+
+Recovers a soft-deleted entity.
+
+```typescript
+public async recoverOne(req: CrudRequest): Promise<T>
+```
+
+<ParamField path="req" type="CrudRequest" required>
+  The CRUD request object identifying the soft-deleted entity.
+</ParamField>
+
+<ResponseField name="return" type="T">
+  Returns the recovered entity.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const recoveredUser = await usersService.recoverOne(req);
+```
+
+### createBuilder
+
+Creates a TypeORM QueryBuilder with all request parameters applied.
+
+```typescript
+public async createBuilder(
+  parsed: ParsedRequestParams,
+  options: CrudRequestOptions,
+  many = true,
+  withDeleted = false
+): Promise<SelectQueryBuilder<T>>
+```
+
+<ParamField path="parsed" type="ParsedRequestParams" required>
+  Parsed request parameters including filters, joins, sort, and pagination.
+</ParamField>
+
+<ParamField path="options" type="CrudRequestOptions" required>
+  CRUD request options from the controller configuration.
+</ParamField>
+
+<ParamField path="many" type="boolean" default="true">
+  Whether to apply pagination and sorting (for getMany) or not (for getOne).
+</ParamField>
+
+<ParamField path="withDeleted" type="boolean" default="false">
+  Whether to include soft-deleted entities in the query.
+</ParamField>
+
+<ResponseField name="return" type="SelectQueryBuilder<T>">
+  A fully configured TypeORM SelectQueryBuilder instance.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const builder = await this.createBuilder(req.parsed, req.options);
+const users = await builder.getMany();
+```
+
+## Advanced Features
+
+### SQL Injection Protection
+
+The service includes built-in SQL injection protection using regular expressions:
+
+```typescript
+protected sqlInjectionRegEx: RegExp[] = [
+  /(%27)|(\')|(--)|(%)|(#)/gi,
+  /((%3D)|(=))[^\n]*((%27)|(\')|(--)|(%)|(;))/gi,
+  /w*((%27)|(\')|(\')|(%4F))((%72)|r|(%52))/gi,
+  /((%27)|(\')|(\')|(\'))union/gi,
+];
+```
+
+<Warning>
+Field names and values are automatically checked for SQL injection patterns. Invalid queries throw BadRequestException.
+</Warning>
+
+### Query Operators
+
+The service supports a comprehensive set of query operators:
+
+**Basic Operators:**
+- `$eq` - Equal to
+- `$ne` - Not equal to
+- `$gt` - Greater than
+- `$lt` - Less than
+- `$gte` - Greater than or equal to
+- `$lte` - Less than or equal to
+
+**String Operators:**
+- `$cont` - Contains
+- `$excl` - Excludes
+- `$starts` - Starts with
+- `$ends` - Ends with
+
+**Case-Insensitive Operators:**
+- `$eqL` - Equal (case-insensitive)
+- `$neL` - Not equal (case-insensitive)
+- `$contL` - Contains (case-insensitive)
+- `$startsL` - Starts with (case-insensitive)
+- `$endsL` - Ends with (case-insensitive)
+- `$exclL` - Excludes (case-insensitive)
+
+**Array Operators:**
+- `$in` - In array
+- `$notin` - Not in array
+- `$inL` - In array (case-insensitive)
+- `$notinL` - Not in array (case-insensitive)
+
+**Null Operators:**
+- `$isnull` - Is null
+- `$notnull` - Is not null
+
+**Range Operators:**
+- `$between` - Between two values
+
+### Database-Specific Optimizations
+
+The service automatically detects the database type and applies appropriate optimizations:
+
+```typescript
+const likeOperator = this.dbName === 'postgres' ? 'ILIKE' : 'LIKE';
+```
+
+For MySQL and MariaDB, backticks are used for identifiers, while PostgreSQL uses double quotes.
+
+## Repository Access
+
+Direct access to TypeORM repository methods:
+
+```typescript
+public get findOne(): Repository<T>['findOne']
+public get find(): Repository<T>['find']
+public get count(): Repository<T>['count']
+```
+
+**Example:**
+
+```typescript
+// Access the underlying repository
+const count = await usersService.count({ where: { isActive: true } });
+const user = await usersService.findOne({ where: { email: 'user@example.com' } });
+```
+
+## Error Handling
+
+The service provides consistent error handling:
+
+- **NotFoundException**: Thrown when an entity is not found
+- **BadRequestException**: Thrown for invalid data or SQL injection attempts
+
+**Example:**
+
+```typescript
+try {
+  const user = await usersService.getOne(req);
+} catch (error) {
+  if (error instanceof NotFoundException) {
+    // Handle not found
+  }
+}
+```
+
+## See Also
+
+- [CrudService](/services/crud-service) - Abstract base class
+- [Custom Service](/services/custom-service) - Creating custom implementations

@@ -1,0 +1,275 @@
+---
+title: "@Crud() decorator"
+description: "Learn how to use the @Crud() decorator to generate RESTful API routes"
+---
+
+The `@Crud()` decorator is the core feature of NestJS CRUD. It automatically generates RESTful API routes for your controller based on the configuration you provide.
+
+## Basic usage
+
+Apply the `@Crud()` decorator to your controller class to generate CRUD routes:
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: {
+    type: User,
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+This minimal configuration generates the following routes:
+
+- `GET /users` - Get many users
+- `GET /users/:id` - Get one user
+- `POST /users` - Create one user
+- `POST /users/bulk` - Create many users
+- `PATCH /users/:id` - Update one user
+- `PUT /users/:id` - Replace one user
+- `DELETE /users/:id` - Delete one user
+
+## Configuration options
+
+The `@Crud()` decorator accepts a `CrudOptions` object with the following properties:
+
+<ParamField path="model" type="ModelOptions" required>
+  The entity model for this controller. Must include a `type` property with your entity class.
+  
+  ```typescript
+  model: {
+    type: User,
+  }
+  ```
+</ParamField>
+
+<ParamField path="dto" type="DtoOptions">
+  Custom DTOs for create, update, and replace operations.
+  
+  ```typescript
+  dto: {
+    create: CreateUserDto,
+    update: UpdateUserDto,
+    replace: ReplaceUserDto,
+  }
+  ```
+</ParamField>
+
+<ParamField path="serialize" type="SerializeOptions">
+  Response serialization options for each route. Use DTOs to transform response data.
+  
+  ```typescript
+  serialize: {
+    get: GetUserResponseDto,
+    getMany: GetUserResponseDto,
+  }
+  ```
+</ParamField>
+
+<ParamField path="query" type="QueryOptions">
+  Query configuration including filtering, sorting, pagination, and joins.
+  
+  See [Query options](/controllers/crud-options#query-options) for details.
+</ParamField>
+
+<ParamField path="routes" type="RoutesOptions">
+  Route-specific configuration to customize or exclude individual routes.
+  
+  See [Route options](/controllers/route-options) for details.
+</ParamField>
+
+<ParamField path="params" type="ParamsOptions">
+  URL parameter configuration for path parameters.
+  
+  See [CRUD options](/controllers/crud-options#params-options) for details.
+</ParamField>
+
+<ParamField path="validation" type="ValidationPipeOptions | false">
+  Validation pipe options or `false` to disable validation.
+  
+  See [Validation](/controllers/validation) for details.
+</ParamField>
+
+## Examples
+
+### With query configuration
+
+```typescript
+@Crud({
+  model: {
+    type: Company,
+  },
+  query: {
+    alwaysPaginate: false,
+    softDelete: true,
+    allow: ['name'],
+    join: {
+      users: {
+        alias: 'companyUsers',
+        exclude: ['email'],
+        eager: true,
+      },
+      projects: {
+        eager: true,
+        select: false,
+      },
+    },
+  },
+})
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+### With nested routes and params
+
+```typescript
+@Crud({
+  model: {
+    type: Project,
+  },
+  params: {
+    companyId: {
+      field: 'companyId',
+      type: 'number',
+    },
+    id: {
+      field: 'id',
+      type: 'number',
+      primary: true,
+    },
+  },
+  query: {
+    join: {
+      users: {},
+    },
+  },
+})
+@Controller('/companies/:companyId/projects')
+export class ProjectsController {
+  constructor(public service: ProjectsService) {}
+}
+```
+
+### With custom DTOs and serialization
+
+```typescript
+@Crud({
+  model: { type: Note },
+  dto: {
+    create: CreateNoteDto,
+  },
+  serialize: {
+    get: GetNoteResponseDto,
+  },
+  query: {
+    alwaysPaginate: true,
+  },
+})
+@Controller('/notes')
+export class NotesController {
+  constructor(public service: NotesService) {}
+}
+```
+
+### With UUID primary key
+
+```typescript
+@Crud({
+  model: { type: Device },
+  params: {
+    deviceKey: {
+      field: 'deviceKey',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+  routes: {
+    deleteOneBase: {
+      returnDeleted: true,
+    },
+  },
+})
+@Controller('/devices')
+export class DevicesController {
+  constructor(public service: DevicesService) {}
+}
+```
+
+## Controller implementation
+
+<Note>
+  Your controller's service must be exposed as a public property named `service`. The CRUD decorator uses this to access your service methods.
+</Note>
+
+### Minimal implementation
+
+```typescript
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+### With CrudController interface
+
+For better type safety, implement the `CrudController` interface:
+
+```typescript
+import { CrudController } from '@nestjsx/crud';
+
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UsersController implements CrudController<User> {
+  constructor(public service: UsersService) {}
+  
+  get base(): CrudController<User> {
+    return this;
+  }
+}
+```
+
+## Generated route names
+
+The decorator generates these base route methods that you can override:
+
+- `getManyBase` - Get multiple entities
+- `getOneBase` - Get a single entity
+- `createOneBase` - Create a single entity
+- `createManyBase` - Create multiple entities (bulk)
+- `updateOneBase` - Update a single entity (partial)
+- `replaceOneBase` - Replace a single entity (full)
+- `deleteOneBase` - Delete a single entity
+- `recoverOneBase` - Recover a soft-deleted entity
+
+See [Overriding routes](/controllers/overriding-routes) to learn how to customize these methods.
+
+## Related topics
+
+<CardGroup cols={2}>
+  <Card title="CRUD options" icon="sliders" href="/controllers/crud-options">
+    Detailed reference for all configuration options
+  </Card>
+  <Card title="Route options" icon="route" href="/controllers/route-options">
+    Configure individual routes
+  </Card>
+  <Card title="Overriding routes" icon="code" href="/controllers/overriding-routes">
+    Customize generated route handlers
+  </Card>
+  <Card title="Validation" icon="shield-check" href="/controllers/validation">
+    Configure request validation
+  </Card>
+</CardGroup>

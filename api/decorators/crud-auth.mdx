@@ -1,0 +1,272 @@
+---
+title: '@CrudAuth'
+description: 'Class decorator for adding authentication and authorization to CRUD operations'
+---
+
+## Overview
+
+The `@CrudAuth` decorator is a class decorator that adds authentication and authorization capabilities to your CRUD controller. It allows you to filter queries based on user context, persist user data in create/update operations, and control serialization based on user permissions.
+
+## Signature
+
+```typescript
+export const CrudAuth = (options: AuthOptions) => (target: unknown): void
+```
+
+## Parameters
+
+<ParamField path="options" type="AuthOptions" required>
+  Authentication and authorization configuration
+
+  <ParamField path="property" type="string" default="user">
+    The property name where the authenticated user is stored in the request object (e.g., `req.user`)
+  </ParamField>
+
+  <ParamField path="filter" type="(req: any) => SCondition | void">
+    Function that returns filter conditions based on the request. These conditions are applied to all read operations using AND logic.
+    
+    **Parameters:**
+    - `req` - The request object containing the authenticated user
+    
+    **Returns:** Filter condition object or void
+  </ParamField>
+
+  <ParamField path="or" type="(req: any) => SCondition | void">
+    Function that returns filter conditions to be applied using OR logic. Useful for scenarios where a user can access their own resources OR shared resources.
+    
+    **Parameters:**
+    - `req` - The request object containing the authenticated user
+    
+    **Returns:** Filter condition object or void
+  </ParamField>
+
+  <ParamField path="persist" type="(req: any) => ObjectLiteral">
+    Function that returns data to be persisted in create and update operations. Commonly used to set the owner/creator of a resource.
+    
+    **Parameters:**
+    - `req` - The request object containing the authenticated user
+    
+    **Returns:** Object with fields to persist
+  </ParamField>
+
+  <ParamField path="classTransformOptions" type="(req: any) => ClassTransformOptions">
+    Function that returns class-transformer options for serialization based on the request context.
+    
+    **Parameters:**
+    - `req` - The request object containing the authenticated user
+    
+    **Returns:** ClassTransformOptions object
+  </ParamField>
+
+  <ParamField path="groups" type="(req: any) => string[]">
+    Function that returns serialization groups based on the request context. These groups are used by class-transformer to include/exclude fields.
+    
+    **Parameters:**
+    - `req` - The request object containing the authenticated user
+    
+    **Returns:** Array of group names
+  </ParamField>
+</ParamField>
+
+## Usage
+
+### Basic Authentication Filter
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud, CrudAuth } from '@nestjsx/crud';
+import { Post } from './post.entity';
+import { PostService } from './post.service';
+
+@Crud({
+  model: { type: Post },
+})
+@CrudAuth({
+  property: 'user',
+  filter: (user) => ({
+    userId: user.id,
+  }),
+})
+@Controller('posts')
+export class PostController {
+  constructor(public service: PostService) {}
+}
+```
+
+This ensures users can only see their own posts.
+
+### Persist User Data on Create
+
+```typescript
+@Crud({
+  model: { type: Post },
+})
+@CrudAuth({
+  property: 'user',
+  filter: (user) => ({ userId: user.id }),
+  persist: (user) => ({
+    userId: user.id,
+    createdBy: user.email,
+  }),
+})
+@Controller('posts')
+export class PostController {
+  constructor(public service: PostService) {}
+}
+```
+
+When a user creates a post, their `userId` and `email` are automatically added to the entity.
+
+### Using OR Conditions
+
+```typescript
+@Crud({
+  model: { type: Document },
+})
+@CrudAuth({
+  property: 'user',
+  filter: (user) => ({
+    ownerId: user.id,
+  }),
+  or: (user) => ({
+    sharedWith: { $in: [user.id] },
+  }),
+})
+@Controller('documents')
+export class DocumentController {
+  constructor(public service: DocumentService) {}
+}
+```
+
+Users can access documents they own OR documents shared with them.
+
+### Role-Based Serialization
+
+```typescript
+@Crud({
+  model: { type: User },
+})
+@CrudAuth({
+  property: 'user',
+  groups: (user) => {
+    return user.role === 'admin' ? ['admin', 'user'] : ['user'];
+  },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+}
+```
+
+Combine with class-transformer groups in your entity:
+
+```typescript
+import { Exclude, Expose } from 'class-transformer';
+
+export class User {
+  @Expose({ groups: ['user', 'admin'] })
+  id: number;
+
+  @Expose({ groups: ['user', 'admin'] })
+  email: string;
+
+  @Expose({ groups: ['admin'] })
+  password: string;
+
+  @Expose({ groups: ['admin'] })
+  createdAt: Date;
+}
+```
+
+### Complete Example
+
+```typescript
+@Crud({
+  model: { type: Task },
+  query: {
+    join: {
+      project: { eager: true },
+      assignee: { eager: true },
+    },
+  },
+})
+@CrudAuth({
+  property: 'user',
+  filter: (user) => ({
+    // User must be the creator or assignee
+    $or: [
+      { creatorId: user.id },
+      { assigneeId: user.id },
+    ],
+  }),
+  persist: (user) => ({
+    creatorId: user.id,
+    updatedBy: user.id,
+  }),
+  classTransformOptions: (user) => ({
+    groups: user.isAdmin ? ['admin'] : ['user'],
+  }),
+})
+@Controller('tasks')
+export class TaskController {
+  constructor(public service: TaskService) {}
+}
+```
+
+## Integration Test Example
+
+From the source tests:
+
+```typescript packages/crud/test/crud-request.interceptor.spec.ts:62-86
+@Crud({
+  model: { type: TestModel },
+  query: {
+    filter: () => ({ name: 'persist' }),
+  },
+})
+@CrudAuth({
+  property: 'user',
+  filter: (user) => ({ user: 'test', buz: 1 }),
+  persist: () => ({ bar: false }),
+})
+@Controller('test3')
+class Test3Controller {
+  constructor(public service: TestService<TestModel>) {}
+
+  @Override('getManyBase')
+  get(@ParsedRequest() req: CrudRequest) {
+    return req;
+  }
+
+  @Override('createOneBase')
+  post(@ParsedRequest() req: CrudRequest) {
+    return req;
+  }
+}
+```
+
+## Implementation Details
+
+The decorator stores auth options in metadata:
+
+```typescript packages/crud/src/decorators/crud-auth.decorator.ts:4-8
+export const CrudAuth =
+  (options: AuthOptions) =>
+  (target: unknown): void => {
+    R.setCrudAuthOptions(options, target);
+  };
+```
+
+<Note>
+  The `@CrudAuth` decorator should be used in combination with `@Crud`. Apply both decorators to the controller class, with `@Crud` typically placed first.
+</Note>
+
+<Warning>
+  Ensure your authentication guard is properly configured to populate the user object in the request. The `property` option should match where your guard stores the authenticated user.
+</Warning>
+
+## See Also
+
+- [@Crud](/api/decorators/crud) - Main CRUD decorator
+- [@Override](/api/decorators/override) - Override routes with custom logic
+- [@ParsedRequest](/api/decorators/parsed-request) - Access request data in overridden routes

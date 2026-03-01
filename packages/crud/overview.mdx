@@ -1,0 +1,112 @@
+---
+title: "@nestjsx/crud"
+description: Core package for building CRUD controllers with NestJS
+---
+
+## Overview
+
+`@nestjsx/crud` is the core package of the NestJS CRUD framework. It provides decorators, controllers, and services that enable you to quickly build RESTful CRUD APIs with minimal boilerplate code.
+
+## What It Does
+
+This package is the foundation of the CRUD framework and provides:
+
+- **`@Crud()` decorator** - Automatically generates CRUD endpoints for your controllers
+- **Base service abstractions** - Provides `CrudService` interface for implementing custom services
+- **Helper decorators** - Additional decorators like `@ParsedRequest`, `@ParsedBody`, `@Override`, and more
+- **Request interceptors** - Built-in interceptors for request parsing and validation
+- **Global configuration** - Configure CRUD behavior across your entire application
+- **Route customization** - Fine-grained control over which routes are generated and how they behave
+
+## Key Features
+
+### Automatic Endpoint Generation
+
+With a single decorator, generate all standard CRUD endpoints:
+
+- `GET /resource` - Get many resources (with filtering, pagination, sorting)
+- `GET /resource/:id` - Get one resource by ID
+- `POST /resource` - Create a new resource
+- `PATCH /resource/:id` - Update a resource
+- `PUT /resource/:id` - Replace a resource
+- `DELETE /resource/:id` - Delete a resource
+
+### Flexible Configuration
+
+Configure routes globally or per-controller:
+
+- Enable/disable specific routes
+- Customize validation
+- Set default query parameters
+- Configure authentication and authorization
+- Add custom route options
+
+### Database Agnostic
+
+The core package is database-agnostic. You can implement the `CrudService` interface for any database or ORM, or use provided implementations like `@nestjsx/crud-typeorm`.
+
+## Main Exports
+
+The package exports the following key items:
+
+### Decorators
+
+- `Crud` - Main decorator for generating CRUD routes
+- `CrudAuth` - Authentication configuration decorator
+- `Override` - Override default route handlers
+- `ParsedRequest` - Access parsed request query
+- `ParsedBody` - Access parsed request body
+- `Feature` - Feature-specific actions
+
+### Services
+
+- `CrudService` - Abstract service interface
+
+### Interfaces & Types
+
+Various TypeScript interfaces and types for configuration and type safety.
+
+### Module
+
+- `CrudConfigService` - Global configuration service
+
+## Dependencies
+
+This package has the following dependencies:
+
+- `@nestjsx/crud-request` - Request parsing and validation
+- `@nestjsx/util` - Utility functions
+- `deepmerge` - Deep merging of configuration objects
+- `pluralize` - Pluralization of resource names
+
+### Peer Dependencies
+
+You'll also need to install:
+
+- `class-transformer` - For object transformation
+- `class-validator` - For validation
+
+<Note>
+  While this is the core package, you'll typically want to install a companion package like `@nestjsx/crud-typeorm` to handle actual database operations.
+</Note>
+
+## Use Cases
+
+This package is ideal when you:
+
+- Want to rapidly scaffold RESTful CRUD APIs
+- Need consistent API endpoints across multiple resources
+- Want to reduce boilerplate code in your controllers
+- Need built-in support for filtering, pagination, and sorting
+- Want automatic Swagger documentation for your CRUD endpoints
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/packages/crud/installation">
+    Install and configure the package
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first CRUD controller
+  </Card>
+</CardGroup>

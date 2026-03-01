@@ -1,0 +1,469 @@
+---
+title: 'Swagger Integration'
+description: 'Automatically generate OpenAPI documentation for your CRUD endpoints'
+icon: 'book'
+---
+
+## Overview
+
+NestJS CRUD automatically integrates with Swagger/OpenAPI to generate comprehensive API documentation for all CRUD endpoints. No additional configuration is needed beyond standard NestJS Swagger setup.
+
+## Basic Setup
+
+Install Swagger dependencies:
+
+```bash
+npm install --save @nestjs/swagger
+```
+
+Configure Swagger in your `main.ts`:
+
+```typescript main.ts
+import { NestFactory } from '@nestjs/core';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  const config = new DocumentBuilder()
+    .setTitle('My CRUD API')
+    .setDescription('API documentation for CRUD endpoints')
+    .setVersion('1.0')
+    .addTag('users')
+    .addTag('companies')
+    .addTag('projects')
+    .build();
+    
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document);
+
+  await app.listen(3000);
+}
+
+bootstrap();
+```
+
+Access your documentation at `http://localhost:3000/docs`.
+
+<Note>
+CRUD endpoints are automatically documented with proper schemas, parameters, and response types.
+</Note>
+
+## Tagging Endpoints
+
+Use `@ApiTags()` to organize endpoints:
+
+```typescript users.controller.ts
+import { Controller } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: { type: User },
+})
+@ApiTags('users')
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Automatic Documentation
+
+The framework automatically generates documentation for:
+
+### Query Parameters
+
+All query parameters are documented with descriptions and links:
+
+- `fields` - Select specific fields
+- `filter` - Filter conditions
+- `or` - OR conditions
+- `sort` - Sorting
+- `join` - Relations to include
+- `limit` - Pagination limit
+- `offset` - Pagination offset
+- `page` - Page number
+- `cache` - Cache control
+- `includeDeleted` - Include soft-deleted records (when enabled)
+
+### Path Parameters
+
+Path parameters are automatically documented based on your `params` configuration:
+
+```typescript projects.controller.ts
+@Crud({
+  model: { type: Project },
+  params: {
+    companyId: {
+      field: 'companyId',
+      type: 'number',
+    },
+    id: {
+      field: 'id',
+      type: 'number',
+      primary: true,
+    },
+  },
+})
+@Controller('/companies/:companyId/projects')
+export class ProjectsController {
+  constructor(public service: ProjectsService) {}
+}
+```
+
+Swagger will document:
+- `companyId` (path parameter, type: number)
+- `id` (path parameter, type: number)
+
+### Response Schemas
+
+Response schemas are automatically generated from:
+
+1. Your entity model
+2. Custom serialization DTOs
+
+## Operation Descriptions
+
+Default operation summaries are generated based on your model name:
+
+- **GET /users** - "Retrieve multiple Users"
+- **GET /users/:id** - "Retrieve a single User"
+- **POST /users** - "Create a single User"
+- **POST /users/bulk** - "Create multiple Users"
+- **PATCH /users/:id** - "Update a single User"
+- **PUT /users/:id** - "Replace a single User"
+- **DELETE /users/:id** - "Delete a single User"
+- **PATCH /users/:id/recover** - "Recover one User"
+
+## DTO Documentation
+
+Document your DTOs with Swagger decorators:
+
+### Request DTOs
+
+```typescript create-note.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNumber, IsString, MaxLength } from 'class-validator';
+
+export class CreateNoteDto {
+  @ApiProperty({ 
+    type: 'number',
+    description: 'The revision ID for this note',
+    example: 1,
+  })
+  @IsNumber()
+  revisionId: number;
+  
+  @ApiProperty({
+    type: 'string',
+    description: 'Note content',
+    maxLength: 500,
+    example: 'This is a note',
+  })
+  @IsString()
+  @MaxLength(500)
+  content: string;
+}
+```
+
+### Response DTOs
+
+```typescript get-company-response.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { Exclude } from 'class-transformer';
+
+export class GetCompanyResponseDto {
+  @ApiProperty({ 
+    type: 'number',
+    description: 'Company ID',
+  })
+  id: number;
+
+  @ApiProperty({ 
+    type: 'string',
+    description: 'Company name',
+  })
+  name: string;
+
+  @ApiProperty({ 
+    type: 'string',
+    description: 'Company domain',
+  })
+  domain: string;
+
+  @Exclude()
+  createdAt: Date;
+
+  @Exclude()
+  updatedAt: Date;
+}
+```
+
+## Entity Documentation
+
+Document your entities for accurate schemas:
+
+```typescript user.entity.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+
+@Entity('users')
+export class User {
+  @ApiProperty({ 
+    description: 'User ID',
+    example: 1,
+  })
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @ApiProperty({ 
+    description: 'User email address',
+    example: 'user@example.com',
+  })
+  @Column({ unique: true })
+  email: string;
+
+  @ApiProperty({ 
+    description: 'User full name',
+    example: 'John Doe',
+  })
+  @Column()
+  name: string;
+
+  @Column()
+  password: string; // Not documented - will be excluded in responses
+}
+```
+
+## Response Types
+
+### Single Resource
+
+For `getOne`, `create`, `update`, `replace`:
+
+```json
+{
+  "id": 1,
+  "email": "user@example.com",
+  "name": "John Doe"
+}
+```
+
+### Multiple Resources
+
+For `getMany` (without pagination):
+
+```json
+[
+  {
+    "id": 1,
+    "email": "user@example.com",
+    "name": "John Doe"
+  },
+  {
+    "id": 2,
+    "email": "jane@example.com",
+    "name": "Jane Smith"
+  }
+]
+```
+
+### Paginated Response
+
+For `getMany` with pagination:
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "email": "user@example.com",
+      "name": "John Doe"
+    }
+  ],
+  "count": 1,
+  "total": 100,
+  "page": 1,
+  "pageCount": 10
+}
+```
+
+## Customizing Responses
+
+Swagger automatically handles different response types based on your configuration:
+
+```typescript
+@Crud({
+  model: { type: Company },
+  query: {
+    alwaysPaginate: false, // Supports both paginated and array responses
+  },
+  routes: {
+    deleteOneBase: {
+      returnDeleted: true, // Documents the deleted entity in response
+    },
+  },
+})
+```
+
+## Soft Delete Documentation
+
+When soft delete is enabled, the `includeDeleted` query parameter is automatically added:
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+  },
+})
+```
+
+Swagger will show:
+- **includeDeleted** (query parameter, type: integer, values: 0 or 1)
+
+## Authentication Documentation
+
+Document authentication requirements:
+
+```typescript main.ts
+const config = new DocumentBuilder()
+  .setTitle('My CRUD API')
+  .setDescription('API documentation')
+  .setVersion('1.0')
+  .addBearerAuth()
+  .build();
+```
+
+Then add to protected controllers:
+
+```typescript users.controller.ts
+import { ApiBearerAuth } from '@nestjs/swagger';
+
+@Crud({
+  model: { type: User },
+})
+@ApiBearerAuth()
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Complete Example
+
+Here's a fully documented setup:
+
+```typescript main.ts
+import { NestFactory } from '@nestjs/core';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  const config = new DocumentBuilder()
+    .setTitle('Company Management API')
+    .setDescription(
+      'CRUD API for managing companies, users, and projects'
+    )
+    .setVersion('1.0')
+    .addBearerAuth()
+    .addTag('companies', 'Company management endpoints')
+    .addTag('users', 'User management endpoints')
+    .addTag('projects', 'Project management endpoints')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document);
+
+  await app.listen(3000);
+}
+
+bootstrap();
+```
+
+```typescript companies.controller.ts
+import { Controller } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Crud } from '@nestjsx/crud';
+import { Company } from './company.entity';
+import { CompaniesService } from './companies.service';
+import { serialize } from './responses';
+
+@Crud({
+  model: { type: Company },
+  serialize,
+  query: {
+    softDelete: true,
+    join: {
+      users: {
+        eager: true,
+      },
+    },
+  },
+  routes: {
+    deleteOneBase: {
+      returnDeleted: false,
+    },
+  },
+})
+@ApiTags('companies')
+@ApiBearerAuth()
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use ApiProperty Decorators">
+    Add `@ApiProperty()` to all DTOs and entities for complete documentation.
+  </Step>
+  
+  <Step title="Add Examples">
+    Include example values in `@ApiProperty()` for better developer experience.
+  </Step>
+  
+  <Step title="Organize with Tags">
+    Use `@ApiTags()` to group related endpoints.
+  </Step>
+  
+  <Step title="Document Authentication">
+    Use `@ApiBearerAuth()` or similar decorators for protected endpoints.
+  </Step>
+</Steps>
+
+<Tip>
+Swagger documentation is generated at build time. Restart your application after making changes to see updated documentation.
+</Tip>
+
+## Troubleshooting
+
+### Missing Response Schemas
+
+If response schemas aren't showing:
+
+1. Ensure `@ApiProperty()` decorators are on all DTO properties
+2. Verify serialization DTOs are correctly configured
+3. Check that entities have proper decorators
+
+### Incorrect Parameter Types
+
+If parameter types are wrong:
+
+1. Verify `params` configuration in `@Crud()`
+2. Ensure entity properties have correct TypeScript types
+3. Check that enums are properly defined
+
+## Related Resources
+
+- [Serialization](/advanced/serialization) - Control response DTOs
+- [Global Configuration](/advanced/global-config) - Configure default behaviors
+- [NestJS Swagger Documentation](https://docs.nestjs.com/openapi/introduction) - Official NestJS Swagger guide

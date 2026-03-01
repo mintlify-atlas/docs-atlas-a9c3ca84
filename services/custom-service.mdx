@@ -1,0 +1,585 @@
+---
+title: "Custom Service Implementation"
+description: "Learn how to create custom CRUD service implementations for different ORMs or data sources"
+---
+
+## Overview
+
+While the framework provides `TypeOrmCrudService` out of the box, you can create custom service implementations for other ORMs (like Mongoose, Prisma, Sequelize) or even non-database data sources (like REST APIs, GraphQL, etc.).
+
+## Creating a Custom Service
+
+To create a custom CRUD service, extend the abstract `CrudService` class and implement all required methods.
+
+### Basic Structure
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { CrudService, CrudRequest, CreateManyDto, GetManyDefaultResponse } from '@nestjsx/crud';
+
+@Injectable()
+export class CustomCrudService<T> extends CrudService<T> {
+  constructor(private dataSource: any) {
+    super();
+  }
+
+  async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]> {
+    // Implementation
+  }
+
+  async getOne(req: CrudRequest): Promise<T> {
+    // Implementation
+  }
+
+  async createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    // Implementation
+  }
+
+  async createMany(req: CrudRequest, dto: CreateManyDto<T | Partial<T>>): Promise<T[]> {
+    // Implementation
+  }
+
+  async updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    // Implementation
+  }
+
+  async replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    // Implementation
+  }
+
+  async deleteOne(req: CrudRequest): Promise<void | T> {
+    // Implementation
+  }
+
+  async recoverOne(req: CrudRequest): Promise<T> {
+    // Implementation
+  }
+}
+```
+
+## Mongoose Example
+
+Here's a complete example of a CRUD service for Mongoose:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, FilterQuery } from 'mongoose';
+import { CrudService, CrudRequest, CreateManyDto, GetManyDefaultResponse } from '@nestjsx/crud';
+import { ParsedRequestParams } from '@nestjsx/crud-request';
+
+@Injectable()
+export class MongoCrudService<T> extends CrudService<T> {
+  constructor(@InjectModel('ModelName') private model: Model<T>) {
+    super();
+  }
+
+  async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]> {
+    const { parsed, options } = req;
+    
+    // Build query
+    const filter = this.buildFilter(parsed);
+    let query = this.model.find(filter);
+    
+    // Apply sorting
+    if (parsed.sort && parsed.sort.length) {
+      const sortObj = parsed.sort.reduce((acc, sort) => {
+        acc[sort.field] = sort.order === 'ASC' ? 1 : -1;
+        return acc;
+      }, {});
+      query = query.sort(sortObj);
+    }
+    
+    // Apply pagination
+    if (this.decidePagination(parsed, options)) {
+      const limit = this.getTake(parsed, options.query);
+      const skip = this.getSkip(parsed, limit);
+      
+      if (limit) query = query.limit(limit);
+      if (skip) query = query.skip(skip);
+      
+      const [data, total] = await Promise.all([
+        query.exec(),
+        this.model.countDocuments(filter)
+      ]);
+      
+      return this.createPageInfo(data, total, limit || total, skip || 0);
+    }
+    
+    return query.exec();
+  }
+
+  async getOne(req: CrudRequest): Promise<T> {
+    const { parsed } = req;
+    const filter = this.buildFilter(parsed);
+    
+    const entity = await this.model.findOne(filter).exec();
+    
+    if (!entity) {
+      this.throwNotFoundException(this.model.modelName);
+    }
+    
+    return entity;
+  }
+
+  async createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    const entity = new this.model(dto);
+    return entity.save();
+  }
+
+  async createMany(req: CrudRequest, dto: CreateManyDto<T | Partial<T>>): Promise<T[]> {
+    if (!dto.bulk || !dto.bulk.length) {
+      this.throwBadRequestException('Empty data. Nothing to save.');
+    }
+    
+    return this.model.insertMany(dto.bulk);
+  }
+
+  async updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    const { parsed } = req;
+    const filter = this.buildFilter(parsed);
+    
+    const entity = await this.model.findOneAndUpdate(
+      filter,
+      { $set: dto },
+      { new: true }
+    ).exec();
+    
+    if (!entity) {
+      this.throwNotFoundException(this.model.modelName);
+    }
+    
+    return entity;
+  }
+
+  async replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    const { parsed } = req;
+    const filter = this.buildFilter(parsed);
+    
+    const entity = await this.model.findOneAndReplace(
+      filter,
+      dto as any,
+      { new: true }
+    ).exec();
+    
+    if (!entity) {
+      this.throwNotFoundException(this.model.modelName);
+    }
+    
+    return entity;
+  }
+
+  async deleteOne(req: CrudRequest): Promise<void | T> {
+    const { parsed, options } = req;
+    const filter = this.buildFilter(parsed);
+    const returnDeleted = options.routes?.deleteOneBase?.returnDeleted;
+    
+    if (returnDeleted) {
+      const entity = await this.model.findOneAndDelete(filter).exec();
+      if (!entity) {
+        this.throwNotFoundException(this.model.modelName);
+      }
+      return entity;
+    }
+    
+    await this.model.deleteOne(filter).exec();
+  }
+
+  async recoverOne(req: CrudRequest): Promise<T> {
+    // Implement soft delete recovery if your schema supports it
+    const { parsed } = req;
+    const filter = this.buildFilter(parsed);
+    
+    const entity = await this.model.findOneAndUpdate(
+      filter,
+      { $unset: { deletedAt: 1 } },
+      { new: true }
+    ).exec();
+    
+    if (!entity) {
+      this.throwNotFoundException(this.model.modelName);
+    }
+    
+    return entity;
+  }
+
+  private buildFilter(parsed: ParsedRequestParams): FilterQuery<T> {
+    const filter: FilterQuery<T> = {};
+    
+    // Build filter from parsed.search
+    if (parsed.search) {
+      // Convert parsed.search to Mongoose filter
+      // This is a simplified example
+      Object.keys(parsed.search).forEach(key => {
+        if (key === '$and' || key === '$or') {
+          filter[key] = parsed.search[key];
+        } else {
+          filter[key] = parsed.search[key];
+        }
+      });
+    }
+    
+    // Add param filters
+    if (parsed.paramsFilter?.length) {
+      parsed.paramsFilter.forEach(param => {
+        filter[param.field] = param.value;
+      });
+    }
+    
+    return filter;
+  }
+}
+```
+
+## Prisma Example
+
+Here's an example for Prisma:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+import { CrudService, CrudRequest, CreateManyDto, GetManyDefaultResponse } from '@nestjsx/crud';
+
+@Injectable()
+export class PrismaCrudService<T> extends CrudService<T> {
+  constructor(
+    private prisma: PrismaService,
+    private modelName: string
+  ) {
+    super();
+  }
+
+  private get model() {
+    return this.prisma[this.modelName];
+  }
+
+  async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]> {
+    const { parsed, options } = req;
+    
+    const where = this.buildWhere(parsed);
+    const orderBy = this.buildOrderBy(parsed);
+    
+    if (this.decidePagination(parsed, options)) {
+      const take = this.getTake(parsed, options.query);
+      const skip = this.getSkip(parsed, take);
+      
+      const [data, total] = await Promise.all([
+        this.model.findMany({ where, orderBy, take, skip }),
+        this.model.count({ where })
+      ]);
+      
+      return this.createPageInfo(data, total, take || total, skip || 0);
+    }
+    
+    return this.model.findMany({ where, orderBy });
+  }
+
+  async getOne(req: CrudRequest): Promise<T> {
+    const { parsed } = req;
+    const where = this.buildWhere(parsed);
+    
+    const entity = await this.model.findFirst({ where });
+    
+    if (!entity) {
+      this.throwNotFoundException(this.modelName);
+    }
+    
+    return entity;
+  }
+
+  async createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    return this.model.create({ data: dto });
+  }
+
+  async createMany(req: CrudRequest, dto: CreateManyDto<T | Partial<T>>): Promise<T[]> {
+    if (!dto.bulk || !dto.bulk.length) {
+      this.throwBadRequestException('Empty data. Nothing to save.');
+    }
+    
+    await this.model.createMany({ data: dto.bulk });
+    return dto.bulk as T[];
+  }
+
+  async updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    const { parsed } = req;
+    const where = this.buildWhere(parsed);
+    
+    return this.model.update({ where, data: dto });
+  }
+
+  async replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    // Prisma doesn't have a direct replace, so we update
+    return this.updateOne(req, dto);
+  }
+
+  async deleteOne(req: CrudRequest): Promise<void | T> {
+    const { parsed, options } = req;
+    const where = this.buildWhere(parsed);
+    const returnDeleted = options.routes?.deleteOneBase?.returnDeleted;
+    
+    if (returnDeleted) {
+      return this.model.delete({ where });
+    }
+    
+    await this.model.delete({ where });
+  }
+
+  async recoverOne(req: CrudRequest): Promise<T> {
+    const { parsed } = req;
+    const where = this.buildWhere(parsed);
+    
+    return this.model.update({
+      where,
+      data: { deletedAt: null }
+    });
+  }
+
+  private buildWhere(parsed: any) {
+    const where: any = {};
+    
+    // Build Prisma where clause from parsed request
+    if (parsed.search) {
+      // Convert to Prisma format
+      Object.assign(where, parsed.search);
+    }
+    
+    if (parsed.paramsFilter?.length) {
+      parsed.paramsFilter.forEach(param => {
+        where[param.field] = param.value;
+      });
+    }
+    
+    return where;
+  }
+
+  private buildOrderBy(parsed: any) {
+    if (!parsed.sort?.length) return undefined;
+    
+    return parsed.sort.map(sort => ({
+      [sort.field]: sort.order.toLowerCase()
+    }));
+  }
+}
+```
+
+## REST API Backend Example
+
+You can even create a CRUD service that communicates with a REST API:
+
+```typescript
+import { Injectable, HttpService } from '@nestjs/common';
+import { CrudService, CrudRequest, CreateManyDto, GetManyDefaultResponse } from '@nestjsx/crud';
+import { lastValueFrom } from 'rxjs';
+
+@Injectable()
+export class RestApiCrudService<T> extends CrudService<T> {
+  constructor(
+    private http: HttpService,
+    private baseUrl: string
+  ) {
+    super();
+  }
+
+  async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]> {
+    const { parsed, options } = req;
+    
+    // Build query string from parsed parameters
+    const params = this.buildQueryParams(parsed);
+    
+    const response = await lastValueFrom(
+      this.http.get<any>(`${this.baseUrl}`, { params })
+    );
+    
+    if (this.decidePagination(parsed, options)) {
+      return {
+        data: response.data.items,
+        count: response.data.items.length,
+        total: response.data.total,
+        page: response.data.page,
+        pageCount: response.data.pageCount
+      };
+    }
+    
+    return response.data;
+  }
+
+  async getOne(req: CrudRequest): Promise<T> {
+    const { parsed } = req;
+    const id = this.extractId(parsed);
+    
+    const response = await lastValueFrom(
+      this.http.get<T>(`${this.baseUrl}/${id}`)
+    );
+    
+    return response.data;
+  }
+
+  async createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    const response = await lastValueFrom(
+      this.http.post<T>(`${this.baseUrl}`, dto)
+    );
+    
+    return response.data;
+  }
+
+  async createMany(req: CrudRequest, dto: CreateManyDto<T | Partial<T>>): Promise<T[]> {
+    const response = await lastValueFrom(
+      this.http.post<T[]>(`${this.baseUrl}/bulk`, dto.bulk)
+    );
+    
+    return response.data;
+  }
+
+  async updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    const { parsed } = req;
+    const id = this.extractId(parsed);
+    
+    const response = await lastValueFrom(
+      this.http.patch<T>(`${this.baseUrl}/${id}`, dto)
+    );
+    
+    return response.data;
+  }
+
+  async replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T> {
+    const { parsed } = req;
+    const id = this.extractId(parsed);
+    
+    const response = await lastValueFrom(
+      this.http.put<T>(`${this.baseUrl}/${id}`, dto)
+    );
+    
+    return response.data;
+  }
+
+  async deleteOne(req: CrudRequest): Promise<void | T> {
+    const { parsed, options } = req;
+    const id = this.extractId(parsed);
+    const returnDeleted = options.routes?.deleteOneBase?.returnDeleted;
+    
+    const response = await lastValueFrom(
+      this.http.delete<T>(`${this.baseUrl}/${id}`)
+    );
+    
+    return returnDeleted ? response.data : undefined;
+  }
+
+  async recoverOne(req: CrudRequest): Promise<T> {
+    const { parsed } = req;
+    const id = this.extractId(parsed);
+    
+    const response = await lastValueFrom(
+      this.http.post<T>(`${this.baseUrl}/${id}/recover`, {})
+    );
+    
+    return response.data;
+  }
+
+  private buildQueryParams(parsed: any): Record<string, any> {
+    const params: Record<string, any> = {};
+    
+    if (parsed.limit) params.limit = parsed.limit;
+    if (parsed.offset) params.offset = parsed.offset;
+    if (parsed.page) params.page = parsed.page;
+    if (parsed.sort?.length) {
+      params.sort = parsed.sort.map(s => `${s.field},${s.order}`).join(';');
+    }
+    
+    return params;
+  }
+
+  private extractId(parsed: any): string | number {
+    if (parsed.paramsFilter?.length) {
+      return parsed.paramsFilter[0].value;
+    }
+    throw new Error('No ID found in request');
+  }
+}
+```
+
+## Using Your Custom Service
+
+Once you've created your custom service, use it in your controller:
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { MongoCrudService } from './mongo-crud.service';
+import { User } from './user.entity';
+
+@Crud({
+  model: {
+    type: User,
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: MongoCrudService<User>) {}
+}
+```
+
+## Best Practices
+
+<Note>
+**Reuse Base Utilities**: Always use the inherited utility methods like `decidePagination`, `getTake`, `getSkip`, and `createPageInfo` for consistent behavior.
+</Note>
+
+<Note>
+**Error Handling**: Use `throwBadRequestException` and `throwNotFoundException` for consistent error responses across your application.
+</Note>
+
+<Warning>
+**Validation**: Make sure to validate input data before processing. The framework doesn't automatically validate DTOs in custom services.
+</Warning>
+
+<Warning>
+**Transaction Support**: If your data source supports transactions, consider implementing transaction handling in your custom service for data consistency.
+</Warning>
+
+## Advanced Customization
+
+### Override Pagination Format
+
+You can override `createPageInfo` to customize the pagination response:
+
+```typescript
+createPage Info(data: T[], total: number, limit: number, offset: number) {
+  return {
+    items: data,
+    pagination: {
+      total,
+      limit,
+      offset,
+      hasMore: offset + data.length < total
+    }
+  };
+}
+```
+
+### Add Custom Methods
+
+Extend your service with custom methods for specific use cases:
+
+```typescript
+export class MongoCrudService<T> extends CrudService<T> {
+  // ... standard CRUD methods ...
+
+  async findByEmail(email: string): Promise<T> {
+    const entity = await this.model.findOne({ email }).exec();
+    if (!entity) {
+      this.throwNotFoundException('User');
+    }
+    return entity;
+  }
+
+  async bulkUpdate(filter: any, update: any): Promise<number> {
+    const result = await this.model.updateMany(filter, update).exec();
+    return result.modifiedCount;
+  }
+}
+```
+
+## See Also
+
+- [CrudService](/services/crud-service) - Abstract base class documentation
+- [TypeOrmCrudService](/services/typeorm-service) - Reference implementation for TypeORM

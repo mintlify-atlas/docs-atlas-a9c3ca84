@@ -1,0 +1,397 @@
+---
+title: "Overriding routes"
+description: "Customize generated route handlers with the @Override() decorator"
+---
+
+The `@Override()` decorator allows you to replace or extend the default behavior of generated CRUD routes with your own custom logic.
+
+## Basic usage
+
+Use the `@Override()` decorator on a controller method to replace a generated route:
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud, CrudController, CrudRequest, ParsedRequest, Override } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UsersController implements CrudController<User> {
+  constructor(public service: UsersService) {}
+  
+  get base(): CrudController<User> {
+    return this;
+  }
+  
+  @Override('getManyBase')
+  getAll(@ParsedRequest() req: CrudRequest) {
+    return this.base.getManyBase(req);
+  }
+}
+```
+
+## The @Override() decorator
+
+```typescript
+Override(name?: BaseRouteName)
+```
+
+<ParamField path="name" type="BaseRouteName">
+  The name of the route to override. If omitted, the method name (with 'Base' suffix) is used.
+</ParamField>
+
+### Available route names
+
+- `getManyBase`
+- `getOneBase`
+- `createOneBase`
+- `createManyBase`
+- `updateOneBase`
+- `replaceOneBase`
+- `deleteOneBase`
+- `recoverOneBase`
+
+## Calling the base implementation
+
+To call the original generated route handler, use `this.base`:
+
+```typescript
+@Override('getOneBase')
+getOne(@ParsedRequest() req: CrudRequest) {
+  // Add custom logic before
+  console.log('Fetching user:', req.parsed.paramsFilter);
+  
+  // Call the base implementation
+  return this.base.getOneBase(req);
+}
+```
+
+<Note>
+  You must implement the `base` getter that returns `this` to access base route implementations.
+</Note>
+
+## Using @ParsedRequest()
+
+The `@ParsedRequest()` decorator provides a `CrudRequest` object with parsed query parameters:
+
+```typescript
+import { ParsedRequest, CrudRequest } from '@nestjsx/crud';
+
+@Override('getManyBase')
+getAll(@ParsedRequest() req: CrudRequest) {
+  // req.parsed contains:
+  // - paramsFilter: URL parameter filters
+  // - search: Search conditions
+  // - filter: Filter conditions
+  // - or: OR conditions
+  // - join: Join configuration
+  // - sort: Sort configuration
+  // - limit: Pagination limit
+  // - offset: Pagination offset
+  // - page: Page number
+  // - cache: Cache setting
+  
+  return this.base.getManyBase(req);
+}
+```
+
+## Common override patterns
+
+### Add logging
+
+```typescript
+@Override('createOneBase')
+async createOne(
+  @ParsedRequest() req: CrudRequest,
+  @Body() dto: CreateUserDto,
+) {
+  this.logger.log(`Creating user: ${dto.email}`);
+  
+  const result = await this.base.createOneBase(req, dto);
+  
+  this.logger.log(`User created: ${result.id}`);
+  return result;
+}
+```
+
+### Add authorization
+
+```typescript
+import { ForbiddenException } from '@nestjs/common';
+
+@Override('deleteOneBase')
+async deleteOne(
+  @ParsedRequest() req: CrudRequest,
+  @CurrentUser() user: User,
+) {
+  // Get the entity first
+  const entity = await this.service.findOne(req.parsed.paramsFilter[0].value);
+  
+  // Check authorization
+  if (entity.ownerId !== user.id) {
+    throw new ForbiddenException('You can only delete your own resources');
+  }
+  
+  return this.base.deleteOneBase(req);
+}
+```
+
+### Modify query parameters
+
+```typescript
+@Override('getManyBase')
+getAll(@ParsedRequest() req: CrudRequest, @CurrentUser() user: User) {
+  // Add filter for current user
+  req.parsed.filter.push({
+    field: 'userId',
+    operator: CondOperator.EQUALS,
+    value: user.id,
+  });
+  
+  return this.base.getManyBase(req);
+}
+```
+
+### Transform response
+
+```typescript
+@Override('getOneBase')
+async getOne(@ParsedRequest() req: CrudRequest) {
+  const user = await this.base.getOneBase(req);
+  
+  // Add computed fields
+  return {
+    ...user,
+    fullName: `${user.firstName} ${user.lastName}`,
+    age: this.calculateAge(user.birthDate),
+  };
+}
+```
+
+### Custom validation
+
+```typescript
+import { BadRequestException } from '@nestjs/common';
+
+@Override('updateOneBase')
+async updateOne(
+  @ParsedRequest() req: CrudRequest,
+  @Body() dto: UpdateUserDto,
+) {
+  // Custom business logic validation
+  if (dto.email && await this.service.emailExists(dto.email)) {
+    throw new BadRequestException('Email already in use');
+  }
+  
+  return this.base.updateOneBase(req, dto);
+}
+```
+
+## Complete custom implementation
+
+You can completely replace the base implementation:
+
+```typescript
+@Override('getManyBase')
+async getAll(
+  @ParsedRequest() req: CrudRequest,
+  @Query('status') status?: string,
+) {
+  // Completely custom implementation
+  const query = this.service.repo.createQueryBuilder('user');
+  
+  if (status) {
+    query.where('user.status = :status', { status });
+  }
+  
+  // Apply CRUD request filters
+  const builder = RequestQueryBuilder.create({
+    filter: req.parsed.filter,
+    or: req.parsed.or,
+    sort: req.parsed.sort,
+  });
+  
+  return query
+    .limit(req.parsed.limit)
+    .offset(req.parsed.offset)
+    .getMany();
+}
+```
+
+## Override without specifying name
+
+When the method name matches the route name (with 'Base' suffix), you can omit the decorator parameter:
+
+```typescript
+// These are equivalent:
+@Override('getManyBase')
+getMany(@ParsedRequest() req: CrudRequest) {
+  return this.base.getManyBase(req);
+}
+
+@Override()
+getManyBase(@ParsedRequest() req: CrudRequest) {
+  return this.base.getManyBase(req);
+}
+```
+
+## Adding route decorators
+
+You can add any NestJS decorators to override methods:
+
+```typescript
+import { UseGuards, UseInterceptors } from '@nestjs/common';
+import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+
+@Override('createOneBase')
+@UseGuards(AuthGuard, RateLimitGuard)
+@UseInterceptors(TransformInterceptor)
+@ApiOperation({ summary: 'Create a new user' })
+@ApiResponse({ status: 201, description: 'User created successfully' })
+async createOne(
+  @ParsedRequest() req: CrudRequest,
+  @Body() dto: CreateUserDto,
+  @CurrentUser() currentUser: User,
+) {
+  // Add creator information
+  dto.createdBy = currentUser.id;
+  
+  return this.base.createOneBase(req, dto);
+}
+```
+
+## Working with bulk operations
+
+```typescript
+import { CreateManyDto } from '@nestjsx/crud';
+
+@Override('createManyBase')
+async createMany(
+  @ParsedRequest() req: CrudRequest,
+  @Body() dto: CreateManyDto<User>,
+) {
+  this.logger.log(`Bulk creating ${dto.bulk.length} users`);
+  
+  // Validate bulk size
+  if (dto.bulk.length > 100) {
+    throw new BadRequestException('Cannot create more than 100 users at once');
+  }
+  
+  return this.base.createManyBase(req, dto);
+}
+```
+
+## Accessing request and response
+
+You can inject standard NestJS decorators:
+
+```typescript
+import { Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
+
+@Override('getOneBase')
+async getOne(
+  @ParsedRequest() req: CrudRequest,
+  @Req() request: Request,
+  @Res({ passthrough: true }) response: Response,
+) {
+  const user = await this.base.getOneBase(req);
+  
+  // Set custom headers
+  response.header('X-User-Id', user.id.toString());
+  response.header('X-Request-Id', request.id);
+  
+  return user;
+}
+```
+
+<Warning>
+  When using `@Res()`, make sure to include `{ passthrough: true }` to allow NestJS to handle the response serialization.
+</Warning>
+
+## Soft delete recovery
+
+```typescript
+@Override('recoverOneBase')
+async recoverOne(@ParsedRequest() req: CrudRequest) {
+  const recovered = await this.base.recoverOneBase(req);
+  
+  // Send notification
+  await this.notificationService.send({
+    userId: recovered.id,
+    message: 'Your account has been recovered',
+  });
+  
+  return recovered;
+}
+```
+
+## Best practices
+
+<Accordion title="Always type your parameters">
+  Use proper TypeScript types for better IDE support and type safety:
+  
+  ```typescript
+  @Override('getOneBase')
+  async getOne(
+    @ParsedRequest() req: CrudRequest,
+    @CurrentUser() user: User,
+  ): Promise<User> {
+    return this.base.getOneBase(req);
+  }
+  ```
+</Accordion>
+
+<Accordion title="Keep overrides focused">
+  Override methods should have a single responsibility. If you need complex logic, extract it to service methods:
+  
+  ```typescript
+  @Override('createOneBase')
+  async createOne(
+    @ParsedRequest() req: CrudRequest,
+    @Body() dto: CreateUserDto,
+  ) {
+    // Good: delegate complex logic to service
+    await this.service.validateNewUser(dto);
+    const result = await this.base.createOneBase(req, dto);
+    await this.service.sendWelcomeEmail(result);
+    return result;
+  }
+  ```
+</Accordion>
+
+<Accordion title="Document your overrides">
+  Add JSDoc comments to explain why you're overriding:
+  
+  ```typescript
+  /**
+   * Override getManyBase to add tenant filtering.
+   * All users must belong to the current tenant.
+   */
+  @Override('getManyBase')
+  getAll(@ParsedRequest() req: CrudRequest, @CurrentTenant() tenant: Tenant) {
+    req.parsed.filter.push({
+      field: 'tenantId',
+      operator: CondOperator.EQUALS,
+      value: tenant.id,
+    });
+    return this.base.getManyBase(req);
+  }
+  ```
+</Accordion>
+
+<Accordion title="Test your overrides">
+  Override methods should be covered by unit and integration tests:
+  
+  ```typescript
+  describe('UsersController', () => {
+    it('should filter users by tenant', async () => {
+      const result = await controller.getAll(mockRequest, mockTenant);
+      expect(result.data.every(u => u.tenantId === mockTenant.id)).toBe(true);
+    });
+  });
+  ```
+</Accordion>

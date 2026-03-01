@@ -1,0 +1,373 @@
+---
+title: "Route options"
+description: "Configure individual CRUD routes with route-specific options"
+---
+
+The `routes` configuration option allows you to customize or exclude individual CRUD routes.
+
+## Routes interface
+
+```typescript
+interface RoutesOptions {
+  exclude?: BaseRouteName[];
+  only?: BaseRouteName[];
+  getManyBase?: GetManyRouteOptions;
+  getOneBase?: GetOneRouteOptions;
+  createOneBase?: CreateOneRouteOptions;
+  createManyBase?: CreateManyRouteOptions;
+  updateOneBase?: UpdateOneRouteOptions;
+  replaceOneBase?: ReplaceOneRouteOptions;
+  deleteOneBase?: DeleteOneRouteOptions;
+  recoverOneBase?: RecoverOneRouteOptions;
+}
+```
+
+## Excluding routes
+
+Use `exclude` to prevent specific routes from being generated:
+
+```typescript
+@Crud({
+  model: { type: User },
+  routes: {
+    exclude: ['createManyBase', 'replaceOneBase'],
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+This generates all routes except bulk create and replace.
+
+## Only specific routes
+
+Use `only` to generate only specific routes:
+
+```typescript
+@Crud({
+  model: { type: User },
+  routes: {
+    only: ['getOneBase', 'updateOneBase'],
+  },
+})
+@Controller('me')
+export class MeController {
+  constructor(public service: UsersService) {}
+}
+```
+
+This generates only GET and PATCH routes, useful for user profile endpoints.
+
+<Note>
+  The `exclude` and `only` options are mutually exclusive. Use one or the other, not both.
+</Note>
+
+## Available route names
+
+All route names use the `Base` suffix:
+
+- `getManyBase` - GET collection
+- `getOneBase` - GET single entity
+- `createOneBase` - POST single entity
+- `createManyBase` - POST bulk create
+- `updateOneBase` - PATCH update
+- `replaceOneBase` - PUT replace
+- `deleteOneBase` - DELETE
+- `recoverOneBase` - PATCH recover (soft delete)
+
+## Base route options
+
+All route types support these common options:
+
+<ParamField path="interceptors" type="any[]">
+  Array of NestJS interceptors to apply to this route.
+</ParamField>
+
+<ParamField path="decorators" type="(PropertyDecorator | MethodDecorator)[]">
+  Array of decorators to apply to this route.
+</ParamField>
+
+### Example: Adding interceptors
+
+```typescript
+import { CacheInterceptor } from '@nestjs/cache-manager';
+import { LoggingInterceptor } from './logging.interceptor';
+
+@Crud({
+  model: { type: User },
+  routes: {
+    getManyBase: {
+      interceptors: [CacheInterceptor],
+    },
+    createOneBase: {
+      interceptors: [LoggingInterceptor],
+    },
+  },
+})
+```
+
+### Example: Adding decorators
+
+```typescript
+import { UseGuards } from '@nestjs/common';
+import { AdminGuard } from './admin.guard';
+
+@Crud({
+  model: { type: User },
+  routes: {
+    deleteOneBase: {
+      decorators: [UseGuards(AdminGuard)],
+    },
+  },
+})
+```
+
+## Create route options
+
+### createOneBase
+
+<ParamField path="createOneBase.returnShallow" type="boolean" default={false}>
+  When `true`, returns only the created entity without relations.
+</ParamField>
+
+```typescript
+@Crud({
+  model: { type: User },
+  routes: {
+    createOneBase: {
+      returnShallow: true,
+    },
+  },
+})
+```
+
+### createManyBase
+
+<ParamField path="createManyBase.interceptors" type="any[]">
+  Interceptors for bulk create operations.
+</ParamField>
+
+<ParamField path="createManyBase.decorators" type="(PropertyDecorator | MethodDecorator)[]">
+  Decorators for bulk create operations.
+</ParamField>
+
+## Update route options
+
+### updateOneBase
+
+<ParamField path="updateOneBase.allowParamsOverride" type="boolean" default={false}>
+  When `true`, allows request body to override URL parameters.
+</ParamField>
+
+<ParamField path="updateOneBase.returnShallow" type="boolean" default={false}>
+  When `true`, returns only the updated entity without relations.
+</ParamField>
+
+```typescript
+@Crud({
+  model: { type: User },
+  routes: {
+    updateOneBase: {
+      allowParamsOverride: false,
+      returnShallow: true,
+    },
+  },
+})
+```
+
+<Warning>
+  Setting `allowParamsOverride: true` can be a security risk. It allows clients to modify path parameter fields like IDs through the request body.
+</Warning>
+
+### replaceOneBase
+
+<ParamField path="replaceOneBase.allowParamsOverride" type="boolean" default={false}>
+  When `true`, allows request body to override URL parameters.
+</ParamField>
+
+<ParamField path="replaceOneBase.returnShallow" type="boolean" default={false}>
+  When `true`, returns only the replaced entity without relations.
+</ParamField>
+
+## Delete route options
+
+### deleteOneBase
+
+<ParamField path="deleteOneBase.returnDeleted" type="boolean" default={false}>
+  When `true`, returns the deleted entity in the response.
+</ParamField>
+
+```typescript
+@Crud({
+  model: { type: Device },
+  routes: {
+    deleteOneBase: {
+      returnDeleted: true,
+    },
+  },
+})
+```
+
+**Without `returnDeleted`:**
+```json
+{}
+```
+
+**With `returnDeleted: true`:**
+```json
+{
+  "id": 123,
+  "name": "My Device",
+  "deviceKey": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+## Recover route options
+
+### recoverOneBase
+
+<ParamField path="recoverOneBase.returnRecovered" type="boolean" default={false}>
+  When `true`, returns the recovered entity in the response.
+</ParamField>
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+  },
+  routes: {
+    recoverOneBase: {
+      returnRecovered: true,
+    },
+  },
+})
+```
+
+<Note>
+  The `recoverOneBase` route is only available when `query.softDelete` is enabled.
+</Note>
+
+## Get route options
+
+### getManyBase and getOneBase
+
+These routes support the base options (interceptors and decorators) but have no additional specific options.
+
+```typescript
+@Crud({
+  model: { type: User },
+  routes: {
+    getManyBase: {
+      interceptors: [CacheInterceptor],
+      decorators: [UseGuards(AuthGuard)],
+    },
+    getOneBase: {
+      decorators: [UseGuards(AuthGuard)],
+    },
+  },
+})
+```
+
+## Complete example
+
+```typescript
+import { Controller, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { AuthGuard } from './auth.guard';
+import { AdminGuard } from './admin.guard';
+import { LoggingInterceptor } from './logging.interceptor';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: { type: User },
+  routes: {
+    // Exclude bulk operations
+    exclude: ['createManyBase', 'replaceOneBase'],
+    
+    // Add logging to all creates
+    createOneBase: {
+      interceptors: [LoggingInterceptor],
+      returnShallow: true,
+    },
+    
+    // Secure updates
+    updateOneBase: {
+      decorators: [UseGuards(AuthGuard)],
+      allowParamsOverride: false,
+      returnShallow: false,
+    },
+    
+    // Admin-only deletes
+    deleteOneBase: {
+      decorators: [UseGuards(AuthGuard, AdminGuard)],
+      returnDeleted: true,
+    },
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Route HTTP methods and paths
+
+Here's how each route maps to HTTP methods:
+
+| Route Name | HTTP Method | Path | Description |
+|------------|-------------|------|-------------|
+| `getManyBase` | GET | `/` | Get multiple entities |
+| `getOneBase` | GET | `/:id` | Get single entity |
+| `createOneBase` | POST | `/` | Create one entity |
+| `createManyBase` | POST | `/bulk` | Create multiple entities |
+| `updateOneBase` | PATCH | `/:id` | Partial update |
+| `replaceOneBase` | PUT | `/:id` | Full replacement |
+| `deleteOneBase` | DELETE | `/:id` | Delete entity |
+| `recoverOneBase` | PATCH | `/:id/recover` | Recover soft-deleted entity |
+
+## Use cases
+
+<Accordion title="Read-only API">
+  ```typescript
+  routes: {
+    only: ['getManyBase', 'getOneBase'],
+  }
+  ```
+</Accordion>
+
+<Accordion title="No bulk operations">
+  ```typescript
+  routes: {
+    exclude: ['createManyBase'],
+  }
+  ```
+</Accordion>
+
+<Accordion title="User profile endpoint">
+  ```typescript
+  routes: {
+    only: ['getOneBase', 'updateOneBase'],
+  },
+  params: {
+    id: {
+      primary: true,
+      disabled: true,  // ID from auth context
+    },
+  }
+  ```
+</Accordion>
+
+<Accordion title="Admin-protected deletes">
+  ```typescript
+  routes: {
+    deleteOneBase: {
+      decorators: [UseGuards(AdminGuard)],
+      returnDeleted: true,
+    },
+  }
+  ```
+</Accordion>

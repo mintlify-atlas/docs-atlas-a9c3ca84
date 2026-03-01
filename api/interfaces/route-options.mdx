@@ -1,0 +1,235 @@
+---
+title: RoutesOptions
+description: Configure individual CRUD route behavior and customization
+---
+
+The `RoutesOptions` interface allows you to customize individual CRUD routes, exclude specific routes, or add decorators and interceptors to specific endpoints.
+
+## Interface Definition
+
+```typescript
+export interface RoutesOptions {
+  exclude?: BaseRouteName[];
+  only?: BaseRouteName[];
+  getManyBase?: GetManyRouteOptions;
+  getOneBase?: GetOneRouteOptions;
+  createOneBase?: CreateOneRouteOptions;
+  createManyBase?: CreateManyRouteOptions;
+  updateOneBase?: UpdateOneRouteOptions;
+  replaceOneBase?: ReplaceOneRouteOptions;
+  deleteOneBase?: DeleteOneRouteOptions;
+  recoverOneBase?: RecoverOneRouteOptions;
+}
+```
+
+## Properties
+
+<ParamField path="exclude" type="BaseRouteName[]">
+  Array of route names to exclude from the controller.
+  
+  Use this when you want most routes but need to exclude specific ones.
+  
+  ```typescript
+  exclude: ['createManyBase', 'deleteOneBase']
+  ```
+</ParamField>
+
+<ParamField path="only" type="BaseRouteName[]">
+  Array of route names to include. Only these routes will be generated.
+  
+  Use this when you want only specific routes and want to exclude everything else.
+  
+  ```typescript
+  only: ['getManyBase', 'getOneBase']
+  ```
+</ParamField>
+
+<ParamField path="getManyBase" type="GetManyRouteOptions">
+  Configuration for the GET (list) endpoint.
+  
+  Accepts `BaseRouteOptions` with `interceptors` and `decorators` properties.
+</ParamField>
+
+<ParamField path="getOneBase" type="GetOneRouteOptions">
+  Configuration for the GET (single) endpoint.
+  
+  Accepts `BaseRouteOptions` with `interceptors` and `decorators` properties.
+</ParamField>
+
+<ParamField path="createOneBase" type="CreateOneRouteOptions">
+  Configuration for the POST (create single) endpoint.
+  
+  Extends `BaseRouteOptions` with:
+  - `returnShallow`: If true, returns only the created entity's ID instead of the full entity
+</ParamField>
+
+<ParamField path="createManyBase" type="CreateManyRouteOptions">
+  Configuration for the POST (create bulk) endpoint.
+  
+  Accepts `BaseRouteOptions` with `interceptors` and `decorators` properties.
+</ParamField>
+
+<ParamField path="updateOneBase" type="UpdateOneRouteOptions">
+  Configuration for the PATCH (partial update) endpoint.
+  
+  Extends `BaseRouteOptions` with:
+  - `allowParamsOverride`: If true, allows request body to override URL parameters
+  - `returnShallow`: If true, returns only the entity's ID instead of the full entity
+</ParamField>
+
+<ParamField path="replaceOneBase" type="ReplaceOneRouteOptions">
+  Configuration for the PUT (full replace) endpoint.
+  
+  Extends `BaseRouteOptions` with:
+  - `allowParamsOverride`: If true, allows request body to override URL parameters
+  - `returnShallow`: If true, returns only the entity's ID instead of the full entity
+</ParamField>
+
+<ParamField path="deleteOneBase" type="DeleteOneRouteOptions">
+  Configuration for the DELETE endpoint.
+  
+  Extends `BaseRouteOptions` with:
+  - `returnDeleted`: If true, returns the deleted entity in the response
+</ParamField>
+
+<ParamField path="recoverOneBase" type="RecoverOneRouteOptions">
+  Configuration for the PATCH (recover soft-deleted) endpoint.
+  
+  Extends `BaseRouteOptions` with:
+  - `returnRecovered`: If true, returns the recovered entity in the response
+</ParamField>
+
+## BaseRouteOptions
+
+All route-specific options extend from `BaseRouteOptions`:
+
+```typescript
+export interface BaseRouteOptions {
+  interceptors?: any[];
+  decorators?: (PropertyDecorator | MethodDecorator)[];
+}
+```
+
+<ParamField path="interceptors" type="any[]">
+  Array of NestJS interceptors to apply to this specific route.
+  
+  ```typescript
+  interceptors: [LoggingInterceptor, TransformInterceptor]
+  ```
+</ParamField>
+
+<ParamField path="decorators" type="(PropertyDecorator | MethodDecorator)[]">
+  Array of decorators to apply to this specific route method.
+  
+  ```typescript
+  decorators: [UseGuards(AuthGuard), ApiOperation({ summary: 'Get all heroes' })]
+  ```
+</ParamField>
+
+## BaseRouteName Type
+
+The `BaseRouteName` type includes all available CRUD route names:
+
+```typescript
+type BaseRouteName =
+  | 'getManyBase'
+  | 'getOneBase'
+  | 'createOneBase'
+  | 'createManyBase'
+  | 'updateOneBase'
+  | 'replaceOneBase'
+  | 'deleteOneBase'
+  | 'recoverOneBase';
+```
+
+## Usage Examples
+
+### Exclude Specific Routes
+
+```typescript
+@Crud({
+  model: { type: Hero },
+  routes: {
+    exclude: ['createManyBase', 'deleteOneBase'],
+  },
+})
+@Controller('heroes')
+export class HeroesController {}
+```
+
+### Only Include Specific Routes
+
+```typescript
+@Crud({
+  model: { type: Hero },
+  routes: {
+    only: ['getManyBase', 'getOneBase'],
+  },
+})
+@Controller('heroes')
+export class HeroesController {}
+```
+
+### Add Decorators and Interceptors
+
+```typescript
+import { UseGuards } from '@nestjs/common';
+import { ApiOperation } from '@nestjs/swagger';
+import { AuthGuard } from './auth.guard';
+import { LoggingInterceptor } from './logging.interceptor';
+
+@Crud({
+  model: { type: Hero },
+  routes: {
+    getManyBase: {
+      decorators: [
+        UseGuards(AuthGuard),
+        ApiOperation({ summary: 'Get all heroes' }),
+      ],
+      interceptors: [LoggingInterceptor],
+    },
+    createOneBase: {
+      returnShallow: true,
+      decorators: [UseGuards(AuthGuard)],
+    },
+  },
+})
+@Controller('heroes')
+export class HeroesController {}
+```
+
+### Configure Return Behavior
+
+```typescript
+@Crud({
+  model: { type: Hero },
+  routes: {
+    createOneBase: {
+      returnShallow: true, // Returns only { id: 1 }
+    },
+    updateOneBase: {
+      returnShallow: false, // Returns full entity
+      allowParamsOverride: true,
+    },
+    deleteOneBase: {
+      returnDeleted: true, // Returns the deleted entity
+    },
+  },
+})
+@Controller('heroes')
+export class HeroesController {}
+```
+
+## Notes
+
+<Note>
+  You cannot use both `exclude` and `only` at the same time. Use `exclude` when you want most routes, or `only` when you want to be explicit about which routes to include.
+</Note>
+
+<Warning>
+  When using `returnShallow: true`, the response will only contain the entity's primary key field(s). This is useful for reducing response size but may require additional requests to fetch full entity data.
+</Warning>
+
+<Expandable title="Route-specific options priority">
+  Route-specific options take precedence over global options. For example, if you set `returnShallow: true` in `routes.createOneBase`, it will override any global serialization settings for that specific route.
+</Expandable>

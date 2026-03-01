@@ -1,0 +1,307 @@
+---
+title: Installing @nestjsx/crud-request
+description: Installation and usage guide for the request query builder package
+---
+
+## Installation
+
+The request package can be installed independently or as part of the full CRUD framework:
+
+<CodeGroup>
+
+```bash npm
+npm install @nestjsx/crud-request
+```
+
+```bash yarn
+yarn add @nestjsx/crud-request
+```
+
+```bash pnpm
+pnpm add @nestjsx/crud-request
+```
+
+</CodeGroup>
+
+<Note>
+  If you install `@nestjsx/crud`, this package is automatically included as a dependency. You only need to install it separately if you want to use the query builder in a standalone project.
+</Note>
+
+## Automatic Dependencies
+
+The following packages are automatically installed:
+
+- `@nestjsx/util` - Shared utility functions
+- `qs` - Query string parsing and stringification
+
+## Usage in Frontend Applications
+
+This package is particularly useful in frontend applications for building API queries:
+
+### Basic Setup
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+// Create a query builder instance
+const qb = RequestQueryBuilder.create();
+```
+
+### Building Simple Queries
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+// Simple search
+const query = RequestQueryBuilder.create()
+  .search({ name: 'John' })
+  .query();
+
+// Result: "?s={\"name\":\"John\"}"
+```
+
+### Building Complex Queries
+
+```typescript
+import { RequestQueryBuilder, CondOperator } from '@nestjsx/crud-request';
+
+const query = RequestQueryBuilder.create()
+  .search({
+    status: 'active',
+    role: 'admin'
+  })
+  .setFilter({
+    field: 'age',
+    operator: CondOperator.GREATER_THAN,
+    value: 18
+  })
+  .sortBy([
+    { field: 'createdAt', order: 'DESC' },
+    { field: 'name', order: 'ASC' }
+  ])
+  .setLimit(20)
+  .setPage(1)
+  .setJoin({ field: 'profile' })
+  .query();
+
+// Use with your HTTP client
+const response = await fetch(`/api/users${query}`);
+```
+
+### Common Query Patterns
+
+#### Pagination
+
+```typescript
+const query = RequestQueryBuilder.create()
+  .setLimit(10)
+  .setPage(1)
+  .query();
+```
+
+#### Sorting
+
+```typescript
+const query = RequestQueryBuilder.create()
+  .sortBy({ field: 'name', order: 'ASC' })
+  .query();
+```
+
+#### Filtering
+
+```typescript
+import { CondOperator } from '@nestjsx/crud-request';
+
+const query = RequestQueryBuilder.create()
+  .setFilter({
+    field: 'email',
+    operator: CondOperator.CONTAINS,
+    value: '@example.com'
+  })
+  .query();
+```
+
+#### Relations
+
+```typescript
+const query = RequestQueryBuilder.create()
+  .setJoin([
+    { field: 'profile' },
+    { field: 'posts' }
+  ])
+  .query();
+```
+
+#### Field Selection
+
+```typescript
+const query = RequestQueryBuilder.create()
+  .select(['id', 'name', 'email'])
+  .query();
+```
+
+## Usage in Backend Applications
+
+### Automatic Parsing
+
+When using `@nestjsx/crud`, request parsing happens automatically:
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud, CrudRequest, ParsedRequest } from '@nestjsx/crud';
+
+@Crud({
+  model: { type: User }
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+  
+  // Access parsed request in overridden methods
+  @Override()
+  getMany(@ParsedRequest() req: CrudRequest) {
+    // req.parsed contains the parsed query
+    return this.service.getMany(req);
+  }
+}
+```
+
+### Manual Parsing
+
+You can also parse queries manually:
+
+```typescript
+import { RequestQueryParser } from '@nestjsx/crud-request';
+
+const parser = RequestQueryParser.create();
+const parsed = parser.parseQuery({
+  fields: 'id,name,email',
+  sort: 'name,ASC',
+  limit: '10',
+  page: '1'
+});
+```
+
+## Integration with HTTP Clients
+
+### Axios
+
+```typescript
+import axios from 'axios';
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const query = RequestQueryBuilder.create()
+  .search({ status: 'active' })
+  .query();
+
+const response = await axios.get(`/api/users${query}`);
+```
+
+### Fetch API
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const query = RequestQueryBuilder.create()
+  .setLimit(20)
+  .query();
+
+const response = await fetch(`/api/users${query}`);
+const data = await response.json();
+```
+
+### Angular HttpClient
+
+```typescript
+import { HttpClient } from '@angular/common/http';
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const query = RequestQueryBuilder.create()
+  .sortBy({ field: 'name', order: 'ASC' })
+  .query();
+
+this.http.get(`/api/users${query}`).subscribe(data => {
+  console.log(data);
+});
+```
+
+## TypeScript Support
+
+The package includes full TypeScript definitions:
+
+```typescript
+import { 
+  RequestQueryBuilder,
+  CondOperator,
+  QueryFilter,
+  QuerySort,
+  QueryJoin 
+} from '@nestjsx/crud-request';
+
+// Type-safe filter
+const filter: QueryFilter = {
+  field: 'age',
+  operator: CondOperator.GREATER_THAN,
+  value: 18
+};
+
+// Type-safe sort
+const sort: QuerySort = {
+  field: 'name',
+  order: 'ASC'
+};
+```
+
+## Available Operators
+
+The package provides the following filter operators:
+
+- `EQUALS` - Equal to
+- `NOT_EQUALS` - Not equal to
+- `GREATER_THAN` - Greater than
+- `LOWER_THAN` - Less than
+- `GREATER_THAN_EQUALS` - Greater than or equal
+- `LOWER_THAN_EQUALS` - Less than or equal
+- `STARTS` - Starts with
+- `ENDS` - Ends with
+- `CONTAINS` - Contains
+- `EXCLUDES` - Excludes
+- `IN` - In array
+- `NOT_IN` - Not in array
+- `IS_NULL` - Is null
+- `NOT_NULL` - Is not null
+- `BETWEEN` - Between values
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Core Package" icon="box" href="/packages/crud/overview">
+    Learn about the core CRUD package
+  </Card>
+  <Card title="TypeORM Integration" icon="database" href="/packages/crud-typeorm/overview">
+    Add TypeORM for database operations
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Query String Too Long
+
+If your query strings are getting too long, consider:
+
+- Using POST requests for complex filters
+- Implementing server-side saved filters
+- Breaking down complex queries into multiple requests
+
+### TypeScript Errors
+
+Ensure your `tsconfig.json` includes:
+
+```json
+{
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  }
+}
+```

@@ -1,0 +1,367 @@
+---
+title: '@ParsedBody'
+description: 'Parameter decorator to inject the validated and parsed request body into controller methods'
+---
+
+## Overview
+
+The `@ParsedBody` decorator is a parameter decorator that injects the validated and transformed request body into your controller method parameters. It's specifically designed for use with CRUD operations and ensures the body has been validated and processed according to your DTO definitions.
+
+## Signature
+
+```typescript
+export const ParsedBody = () => (target, key, index) => {
+  Reflect.defineMetadata(PARSED_BODY_METADATA, { index }, target[key]);
+};
+```
+
+## Usage
+
+### Basic Usage
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud, Override, ParsedBody, ParsedRequest, CrudRequest } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UserService } from './user.service';
+
+@Crud({
+  model: { type: User },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+
+  @Override()
+  async createOne(
+    @ParsedBody() dto: CreateUserDto,
+    @ParsedRequest() req: CrudRequest
+  ) {
+    console.log('Validated user data:', dto);
+    return this.service.createOne(req, dto);
+  }
+}
+```
+
+### With Bulk Create
+
+```typescript
+import { CreateManyDto } from '@nestjsx/crud';
+
+@Crud({
+  model: { type: Product },
+})
+@Controller('products')
+export class ProductController implements CrudController<Product> {
+  constructor(public service: ProductService) {}
+
+  get base(): CrudController<Product> {
+    return this;
+  }
+
+  @Override('createManyBase')
+  async createBulk(
+    @ParsedBody() dto: CreateManyDto<Product>,
+    @ParsedRequest() req: CrudRequest
+  ) {
+    console.log(`Creating ${dto.bulk.length} products`);
+    
+    // Custom validation or processing
+    for (const product of dto.bulk) {
+      if (product.price < 0) {
+        throw new BadRequestException('Price cannot be negative');
+      }
+    }
+    
+    return this.base.createManyBase(req, dto);
+  }
+}
+```
+
+### Adding Business Logic
+
+```typescript
+@Crud({
+  model: { type: Post },
+})
+@Controller('posts')
+export class PostController implements CrudController<Post> {
+  constructor(
+    public service: PostService,
+    private slugService: SlugService,
+  ) {}
+
+  get base(): CrudController<Post> {
+    return this;
+  }
+
+  @Override()
+  async createOne(
+    @ParsedBody() dto: Post,
+    @ParsedRequest() req: CrudRequest,
+    @Request() request
+  ) {
+    // Add computed fields
+    dto.slug = this.slugService.generate(dto.title);
+    dto.authorId = request.user.id;
+    dto.createdAt = new Date();
+    
+    // Sanitize content
+    dto.content = this.sanitizeHtml(dto.content);
+    
+    return this.base.createOneBase(req, dto);
+  }
+
+  private sanitizeHtml(html: string): string {
+    // Your sanitization logic
+    return html;
+  }
+}
+```
+
+### With Update Operations
+
+```typescript
+@Crud({
+  model: { type: Task },
+})
+@Controller('tasks')
+export class TaskController implements CrudController<Task> {
+  constructor(public service: TaskService) {}
+
+  get base(): CrudController<Task> {
+    return this;
+  }
+
+  @Override('updateOneBase')
+  async updateOne(
+    @ParsedRequest() req: CrudRequest,
+    @ParsedBody() dto: Task
+  ) {
+    // Track modifications
+    dto.updatedAt = new Date();
+    
+    // Business rule: can't change status to completed if no assignee
+    if (dto.status === 'completed' && !dto.assigneeId) {
+      throw new BadRequestException('Cannot complete task without assignee');
+    }
+    
+    return this.base.updateOneBase(req, dto);
+  }
+}
+```
+
+### Integration Test Example
+
+From the source tests:
+
+```typescript packages/crud/test/crud.decorator.override.spec.ts:53-55
+@Override('createManyBase')
+createBulk(@ParsedBody() dto: CreateManyDto<TestModel>, @ParsedRequest() req: CrudRequest) {
+  return this.base.createManyBase(req, dto);
+}
+```
+
+### Combining with Validation
+
+```typescript
+import { IsString, IsEmail, MinLength, IsOptional } from 'class-validator';
+import { Transform } from 'class-transformer';
+
+export class CreateUserDto {
+  @IsString()
+  @MinLength(2)
+  firstName: string;
+
+  @IsString()
+  @MinLength(2)
+  lastName: string;
+
+  @IsEmail()
+  @Transform(({ value }) => value.toLowerCase())
+  email: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+}
+
+@Crud({
+  model: { type: User },
+  dto: {
+    create: CreateUserDto,
+    update: UpdateUserDto,
+  },
+})
+@Controller('users')
+export class UserController implements CrudController<User> {
+  constructor(public service: UserService) {}
+
+  get base(): CrudController<User> {
+    return this;
+  }
+
+  @Override()
+  async createOne(
+    @ParsedBody() dto: CreateUserDto,
+    @ParsedRequest() req: CrudRequest
+  ) {
+    // dto is already validated and transformed
+    console.log('Email (lowercase):', dto.email);
+    
+    // Check for existing user
+    const exists = await this.service.findByEmail(dto.email);
+    if (exists) {
+      throw new ConflictException('Email already registered');
+    }
+    
+    return this.base.createOneBase(req, dto);
+  }
+}
+```
+
+### With File Uploads
+
+```typescript
+import { UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+
+@Crud({
+  model: { type: Document },
+})
+@Controller('documents')
+export class DocumentController implements CrudController<Document> {
+  constructor(
+    public service: DocumentService,
+    private storageService: StorageService,
+  ) {}
+
+  get base(): CrudController<Document> {
+    return this;
+  }
+
+  @Override()
+  @UseInterceptors(FileInterceptor('file'))
+  async createOne(
+    @ParsedBody() dto: Document,
+    @ParsedRequest() req: CrudRequest,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    // Upload file to storage
+    const fileUrl = await this.storageService.upload(file);
+    
+    // Add file URL to DTO
+    dto.fileUrl = fileUrl;
+    dto.fileName = file.originalname;
+    dto.fileSize = file.size;
+    
+    return this.base.createOneBase(req, dto);
+  }
+}
+```
+
+### Advanced: Conditional Processing
+
+```typescript
+@Crud({
+  model: { type: Order },
+})
+@Controller('orders')
+export class OrderController implements CrudController<Order> {
+  constructor(
+    public service: OrderService,
+    private inventoryService: InventoryService,
+    private paymentService: PaymentService,
+  ) {}
+
+  get base(): CrudController<Order> {
+    return this;
+  }
+
+  @Override()
+  async createOne(
+    @ParsedBody() dto: Order,
+    @ParsedRequest() req: CrudRequest,
+    @Request() request
+  ) {
+    // Validate inventory
+    for (const item of dto.items) {
+      const available = await this.inventoryService.checkStock(item.productId, item.quantity);
+      if (!available) {
+        throw new BadRequestException(`Insufficient stock for product ${item.productId}`);
+      }
+    }
+    
+    // Calculate totals
+    dto.subtotal = dto.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    dto.tax = dto.subtotal * 0.1;
+    dto.total = dto.subtotal + dto.tax;
+    
+    // Set customer
+    dto.customerId = request.user.id;
+    
+    // Create order
+    const order = await this.base.createOneBase(req, dto);
+    
+    // Process payment
+    if (dto.paymentMethod) {
+      await this.paymentService.charge(order.id, dto.total, dto.paymentMethod);
+    }
+    
+    return order;
+  }
+}
+```
+
+## Implementation Details
+
+```typescript packages/crud/src/decorators/parsed-body.decorator.ts:3-5
+export const ParsedBody = () => (target, key, index) => {
+  Reflect.defineMetadata(PARSED_BODY_METADATA, { index }, target[key]);
+};
+```
+
+The decorator stores metadata about the parameter index, which the CRUD framework uses to inject the validated body.
+
+<Note>
+  The `@ParsedBody` decorator ensures the request body has been validated according to your DTO class using class-validator decorators. Any validation errors will be thrown before your method is called.
+</Note>
+
+<Warning>
+  Always use `@ParsedBody` instead of the standard `@Body` decorator when overriding CRUD routes. This ensures proper integration with the CRUD validation pipeline.
+</Warning>
+
+## CreateManyDto Structure
+
+When using `@ParsedBody` with bulk create operations:
+
+```typescript
+interface CreateManyDto<T> {
+  bulk: T[];
+}
+```
+
+Example:
+
+```typescript
+@Override('createManyBase')
+async createBulk(
+  @ParsedBody() dto: CreateManyDto<Product>
+) {
+  console.log('Number of items:', dto.bulk.length);
+  
+  dto.bulk.forEach((product, index) => {
+    console.log(`Product ${index}:`, product);
+  });
+  
+  return this.service.createMany(dto);
+}
+```
+
+## See Also
+
+- [@ParsedRequest](/api/decorators/parsed-request) - Access parsed request data
+- [@Override](/api/decorators/override) - Override CRUD routes
+- [@Crud](/api/decorators/crud) - Main CRUD decorator
+- [Validation](/controllers/validation) - DTO validation guide

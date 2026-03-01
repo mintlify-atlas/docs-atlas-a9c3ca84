@@ -1,0 +1,143 @@
+---
+title: Installing @nestjsx/crud
+description: Installation and setup guide for the core CRUD package
+---
+
+## Installation
+
+Install the core package along with its required peer dependencies:
+
+<CodeGroup>
+
+```bash npm
+npm install @nestjsx/crud class-transformer class-validator
+```
+
+```bash yarn
+yarn add @nestjsx/crud class-transformer class-validator
+```
+
+```bash pnpm
+pnpm add @nestjsx/crud class-transformer class-validator
+```
+
+</CodeGroup>
+
+## Required Dependencies
+
+### Peer Dependencies
+
+The package requires the following peer dependencies:
+
+- **class-transformer** - Used for transforming plain objects to class instances and vice versa
+- **class-validator** - Used for validation decorators and validation logic
+
+### Automatic Dependencies
+
+The following packages are automatically installed as dependencies:
+
+- `@nestjsx/crud-request` - Request parsing and query builder functionality
+- `@nestjsx/util` - Shared utility functions
+- `deepmerge` - Deep merging configuration objects
+- `pluralize` - Pluralization of resource names
+
+## Quick Setup
+
+After installation, you can start using the `@Crud()` decorator in your controllers:
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UserService } from './user.service';
+
+@Crud({
+  model: {
+    type: User,
+  },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+}
+```
+
+<Note>
+  While you can use `@nestjsx/crud` on its own, you'll typically want to install a database integration package like `@nestjsx/crud-typeorm` to handle actual CRUD operations.
+</Note>
+
+## Global Configuration (Optional)
+
+You can configure CRUD behavior globally in your application:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { CrudConfigService } from '@nestjsx/crud';
+
+CrudConfigService.load({
+  query: {
+    limit: 10,
+    cache: 2000,
+    alwaysPaginate: true,
+  },
+  routes: {
+    exclude: ['createManyBase'],
+  },
+  params: {
+    id: {
+      field: 'id',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+});
+
+@Module({
+  // your module configuration
+})
+export class AppModule {}
+```
+
+## Verification
+
+To verify the installation, check that you can import from the package:
+
+```typescript
+import { Crud, CrudAuth, Override, ParsedRequest } from '@nestjsx/crud';
+```
+
+If no errors occur, the package is installed correctly.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="TypeORM Integration" icon="database" href="/packages/crud-typeorm/installation">
+    Install TypeORM integration for database operations
+  </Card>
+  <Card title="Build Your First API" icon="code" href="/quickstart">
+    Follow the quickstart guide
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Missing Peer Dependencies
+
+If you see warnings about missing peer dependencies, make sure you've installed both `class-transformer` and `class-validator`:
+
+```bash
+npm install class-transformer class-validator
+```
+
+### TypeScript Errors
+
+Ensure your `tsconfig.json` has the following settings:
+
+```json
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  }
+}
+```

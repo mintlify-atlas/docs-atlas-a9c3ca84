@@ -1,0 +1,281 @@
+---
+title: 'Global Configuration'
+description: 'Configure global settings for all CRUD controllers in your application'
+icon: 'globe'
+---
+
+## Overview
+
+The global configuration allows you to set default options that apply to all CRUD controllers in your application. This helps maintain consistency and reduces repetition across your codebase.
+
+<Note>
+Global configuration must be loaded **before** importing your `AppModule`. This ensures that all controllers inherit the correct settings.
+</Note>
+
+## Basic Setup
+
+Load global configuration in your `main.ts` file:
+
+```typescript main.ts
+import { NestFactory } from '@nestjs/core';
+import { CrudConfigService } from '@nestjsx/crud';
+
+// Load config BEFORE importing AppModule
+CrudConfigService.load({
+  auth: {
+    property: 'user',
+  },
+  query: {
+    limit: 25,
+    maxLimit: 100,
+    cache: 2000,
+    alwaysPaginate: false,
+  },
+  routes: {
+    exclude: ['createManyBase'],
+  },
+});
+
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+
+bootstrap();
+```
+
+## Configuration Options
+
+### Query Options
+
+Control query behavior across all endpoints:
+
+```typescript
+CrudConfigService.load({
+  query: {
+    limit: 25,              // Default number of items per page
+    maxLimit: 100,          // Maximum allowed limit
+    cache: 2000,            // Cache duration in milliseconds
+    alwaysPaginate: false,  // Always return paginated responses
+    softDelete: false,      // Enable soft delete by default
+  },
+});
+```
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | `number` | Default number of items returned in `getMany` requests |
+| `maxLimit` | `number` | Maximum limit users can request |
+| `cache` | `number \| false` | Cache duration in milliseconds, or `false` to disable |
+| `alwaysPaginate` | `boolean` | If `true`, always return paginated format |
+| `softDelete` | `boolean` | Enable soft delete functionality globally |
+
+### Routes Options
+
+Configure which routes are available by default:
+
+```typescript
+CrudConfigService.load({
+  routes: {
+    // Exclude specific routes globally
+    exclude: ['createManyBase'],
+    
+    // Configure specific route options
+    deleteOneBase: {
+      returnDeleted: false,
+    },
+    createOneBase: {
+      returnShallow: false,
+    },
+    updateOneBase: {
+      allowParamsOverride: false,
+      returnShallow: false,
+    },
+  },
+});
+```
+
+<Tip>
+You can override global route settings in individual controllers using the `@Crud()` decorator.
+</Tip>
+
+### Auth Options
+
+Set global authentication property:
+
+```typescript
+CrudConfigService.load({
+  auth: {
+    property: 'user',
+  },
+});
+```
+
+This specifies the request property where the authenticated user object is stored (e.g., `req.user`).
+
+### Query Parser Options
+
+Customize query string parsing:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+CrudConfigService.load({
+  queryParser: {
+    delim: '||',
+    delimStr: ',',
+    paramNamesMap: {
+      fields: ['fields', 'select'],
+      search: 's',
+      filter: ['filter', 'where'],
+      or: 'or',
+      join: ['join', 'relations'],
+      sort: 'sort',
+      limit: 'limit',
+      offset: 'offset',
+      page: 'page',
+      cache: 'cache',
+    },
+  },
+});
+```
+
+### Serialization Options
+
+Disable serialization globally for specific operations:
+
+```typescript
+CrudConfigService.load({
+  serialize: {
+    get: false,       // Disable for getOne
+    getMany: false,   // Disable for getMany
+    create: false,    // Disable for create
+    update: false,    // Disable for update
+    replace: false,   // Disable for replace
+    delete: false,    // Disable for delete
+  },
+});
+```
+
+<Warning>
+Setting serialization to `false` globally will disable DTOs for all controllers unless explicitly overridden.
+</Warning>
+
+### Params Options
+
+Define global parameter configurations:
+
+```typescript
+CrudConfigService.load({
+  params: {
+    id: {
+      field: 'id',
+      type: 'number',
+      primary: true,
+    },
+  },
+});
+```
+
+## Complete Example
+
+Here's a comprehensive global configuration:
+
+```typescript main.ts
+import { NestFactory } from '@nestjs/core';
+import { CrudConfigService } from '@nestjsx/crud';
+
+CrudConfigService.load({
+  // Authentication
+  auth: {
+    property: 'user',
+  },
+  
+  // Query defaults
+  query: {
+    limit: 20,
+    maxLimit: 100,
+    cache: 2000,
+    alwaysPaginate: false,
+    softDelete: true,
+  },
+  
+  // Route configuration
+  routes: {
+    exclude: ['createManyBase'],
+    deleteOneBase: {
+      returnDeleted: false,
+    },
+    updateOneBase: {
+      allowParamsOverride: false,
+      returnShallow: false,
+    },
+  },
+  
+  // Query parser
+  queryParser: {
+    delim: '||',
+    delimStr: ',',
+  },
+});
+
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+
+bootstrap();
+```
+
+## Override in Controllers
+
+Global settings can be overridden in individual controllers:
+
+```typescript users.controller.ts
+@Crud({
+  model: { type: User },
+  query: {
+    limit: 50,           // Override global limit
+    alwaysPaginate: true, // Override global setting
+  },
+  routes: {
+    only: ['getManyBase', 'getOneBase'], // Override global routes
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Load Early">
+    Always load global configuration before importing `AppModule` to ensure all controllers use the settings.
+  </Step>
+  
+  <Step title="Set Sensible Defaults">
+    Configure reasonable default values that work for most of your application.
+  </Step>
+  
+  <Step title="Document Overrides">
+    Clearly document when and why you override global settings in specific controllers.
+  </Step>
+  
+  <Step title="Consider Security">
+    Set appropriate `maxLimit` values to prevent abuse of your API.
+  </Step>
+</Steps>
+
+## Related Resources
+
+- [Authentication](/advanced/authentication) - Configure authentication and authorization
+- [Serialization](/advanced/serialization) - Control response serialization
+- [Caching](/advanced/caching) - Configure response caching

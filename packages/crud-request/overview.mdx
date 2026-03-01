@@ -1,0 +1,216 @@
+---
+title: "@nestjsx/crud-request"
+description: Request query builder and parser for NestJS CRUD
+---
+
+## Overview
+
+`@nestjsx/crud-request` is a framework-agnostic package that provides request query building and parsing capabilities. It's used both on the backend (for parsing incoming requests) and on the frontend (for building query strings).
+
+## What It Does
+
+This package handles the translation between HTTP query strings and structured query objects:
+
+- **`RequestQueryBuilder`** - Build complex query strings for API requests (frontend usage)
+- **`RequestQueryParser`** - Parse and validate incoming query strings (backend usage)
+- **Query validation** - Ensures query parameters are valid and safe
+- **Type definitions** - Provides TypeScript interfaces for all query structures
+
+## Key Features
+
+### Frontend Query Building
+
+Build complex queries programmatically:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const queryString = RequestQueryBuilder.create()
+  .search({ name: 'John' })
+  .sortBy({ field: 'createdAt', order: 'DESC' })
+  .setLimit(10)
+  .setPage(1)
+  .query();
+
+// Result: "?s={"name":"John"}&sort=createdAt,DESC&limit=10&page=1"
+```
+
+### Backend Query Parsing
+
+Automatically parse incoming requests:
+
+- Validates query parameters
+- Converts strings to appropriate types
+- Handles nested objects and arrays
+- Provides structured output for services to consume
+
+### Supported Query Features
+
+The package supports a rich query syntax:
+
+#### Filtering
+
+- **Search** - Simple field-value matching
+- **Filter** - Complex conditions with operators:
+  - `$eq` - Equal
+  - `$ne` - Not equal
+  - `$gt` - Greater than
+  - `$gte` - Greater than or equal
+  - `$lt` - Less than
+  - `$lte` - Less than or equal
+  - `$starts` - Starts with
+  - `$ends` - Ends with
+  - `$cont` - Contains
+  - `$excl` - Excludes
+  - `$in` - In array
+  - `$notin` - Not in array
+  - `$isnull` - Is null
+  - `$notnull` - Is not null
+  - `$between` - Between values
+
+#### Sorting
+
+- Single or multiple field sorting
+- Ascending or descending order
+
+#### Pagination
+
+- Limit and offset
+- Page and per-page
+
+#### Relations
+
+- Join related entities
+- Nested relations
+
+#### Field Selection
+
+- Select specific fields
+- Exclude fields
+
+#### Caching
+
+- Query result caching with TTL
+
+## Main Exports
+
+The package exports:
+
+### Classes
+
+- `RequestQueryBuilder` - Query builder for creating query strings
+- `RequestQueryParser` - Query parser for parsing incoming requests
+
+### Interfaces & Types
+
+Various TypeScript interfaces including:
+
+- `QueryFilter` - Filter structure
+- `QuerySort` - Sort structure  
+- `QueryJoin` - Join structure
+- `ParsedRequestParams` - Parsed request result
+- And more...
+
+### Exceptions
+
+Custom exceptions for query validation errors.
+
+## Frontend Usage
+
+This package is particularly useful for frontend applications that need to communicate with CRUD APIs:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+import axios from 'axios';
+
+const query = RequestQueryBuilder.create()
+  .search({ status: 'active' })
+  .sortBy({ field: 'name', order: 'ASC' })
+  .setLimit(20)
+  .query();
+
+const response = await axios.get(`/api/users${query}`);
+```
+
+## Backend Usage
+
+On the backend, the parsing happens automatically when using `@nestjsx/crud`, but you can also use the parser directly:
+
+```typescript
+import { RequestQueryParser } from '@nestjsx/crud-request';
+
+const parser = RequestQueryParser.create();
+const parsed = parser.parseQuery(req.query);
+// Use parsed query in your service
+```
+
+## Dependencies
+
+This package has minimal dependencies:
+
+- `@nestjsx/util` - Shared utility functions
+- `qs` - Query string parsing library
+
+<Note>
+  This package is framework-agnostic and can be used in any JavaScript/TypeScript project, not just NestJS applications. It's particularly useful for frontend applications that need to communicate with CRUD APIs.
+</Note>
+
+## Query String Format
+
+The package uses a specific query string format:
+
+### Search
+```
+?s={"name":"John","age":30}
+```
+
+### Filter
+```
+?filter=age||$gt||18&filter=status||$eq||active
+```
+
+### Sort
+```
+?sort=name,ASC&sort=createdAt,DESC
+```
+
+### Pagination
+```
+?limit=10&page=1
+```
+
+### Join Relations
+```
+?join=profile&join=posts
+```
+
+### Select Fields
+```
+?fields=id,name,email
+```
+
+### Cache
+```
+?cache=2000
+```
+
+## Use Cases
+
+This package is ideal when you:
+
+- Need to build complex queries from a frontend application
+- Want type-safe query building
+- Need to parse and validate incoming query parameters
+- Want consistent query format across your API
+- Need to support advanced filtering and sorting
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/packages/crud-request/installation">
+    Install and use the request package
+  </Card>
+  <Card title="Core Package" icon="box" href="/packages/crud/overview">
+    Learn about the core CRUD package
+  </Card>
+</CardGroup>

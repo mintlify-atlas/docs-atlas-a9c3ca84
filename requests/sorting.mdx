@@ -1,0 +1,420 @@
+---
+title: Sorting
+description: Sort API results in ascending or descending order using the NestJS CRUD framework
+---
+
+Sorting allows you to order API results by one or more fields in ascending or descending order. This is essential for presenting data in a meaningful way to users.
+
+## Basic Syntax
+
+The sort parameter uses the following format:
+
+```bash
+sort={field},{order}
+```
+
+- **field**: The name of the field to sort by
+- **order**: Either `ASC` (ascending) or `DESC` (descending)
+
+<Note>
+  The field and order are separated by a comma (`,`), not the standard delimiter (`||`).
+</Note>
+
+### Example
+
+```bash
+GET /users?sort=name,ASC
+```
+
+This retrieves users sorted by name in ascending order (A to Z).
+
+## Sort Orders
+
+There are two sort orders available:
+
+| Order | Description | Example |
+|-------|-------------|----------|
+| `ASC` | Ascending (A-Z, 0-9, oldest-newest) | `sort=name,ASC` |
+| `DESC` | Descending (Z-A, 9-0, newest-oldest) | `sort=createdAt,DESC` |
+
+<Warning>
+  Sort order is case-sensitive. Use uppercase `ASC` or `DESC`. Lowercase values will throw an error.
+</Warning>
+
+## Ascending Sort
+
+Ascending sort orders results from lowest to highest:
+
+```bash
+# Sort users by name (A to Z)
+GET /users?sort=name,ASC
+
+# Sort products by price (lowest to highest)
+GET /products?sort=price,ASC
+
+# Sort posts by date (oldest first)
+GET /posts?sort=createdAt,ASC
+```
+
+## Descending Sort
+
+Descending sort orders results from highest to lowest:
+
+```bash
+# Sort users by name (Z to A)
+GET /users?sort=name,DESC
+
+# Sort products by price (highest to lowest)
+GET /products?sort=price,DESC
+
+# Sort posts by date (newest first)
+GET /posts?sort=createdAt,DESC
+```
+
+## Multiple Sort Fields
+
+You can sort by multiple fields by adding multiple `sort` parameters:
+
+```bash
+# Sort by status (ASC), then by name (ASC)
+GET /users?sort=status,ASC&sort=name,ASC
+
+# Sort by priority (DESC), then by createdAt (DESC)
+GET /tasks?sort=priority,DESC&sort=createdAt,DESC
+```
+
+The order of sort parameters matters:
+- First sort parameter is the primary sort
+- Second sort parameter is applied when primary values are equal
+- And so on...
+
+### Example with Multiple Sorts
+
+```bash
+GET /users?sort=role,ASC&sort=lastName,ASC&sort=firstName,ASC
+```
+
+This sorts users:
+1. First by role (alphabetically)
+2. Within each role, by last name (alphabetically)
+3. Within each last name, by first name (alphabetically)
+
+## Sorting Different Data Types
+
+### Strings
+
+```bash
+# Alphabetical sort
+GET /users?sort=name,ASC
+
+# Reverse alphabetical
+GET /users?sort=email,DESC
+```
+
+String sorting is typically case-sensitive and follows lexicographic order.
+
+### Numbers
+
+```bash
+# Numeric sort (ascending)
+GET /products?sort=price,ASC
+
+# Numeric sort (descending)
+GET /users?sort=age,DESC
+```
+
+Numbers are sorted numerically (e.g., 1, 2, 10, 100).
+
+### Dates
+
+```bash
+# Oldest first
+GET /posts?sort=createdAt,ASC
+
+# Newest first (most common)
+GET /posts?sort=createdAt,DESC
+
+# Sort by last update
+GET /articles?sort=updatedAt,DESC
+```
+
+Dates are sorted chronologically.
+
+### Booleans
+
+```bash
+# false values first, then true
+GET /users?sort=isActive,ASC
+
+# true values first, then false
+GET /users?sort=isVerified,DESC
+```
+
+Boolean sorting: `false` < `true` in ascending order.
+
+## Sorting with Other Parameters
+
+Combine sorting with filtering, pagination, and field selection:
+
+### Sort with Filter
+
+```bash
+# Get active users sorted by name
+GET /users?filter=isActive||eq||true&sort=name,ASC
+
+# Get products under $100 sorted by price
+GET /products?filter=price||lt||100&sort=price,ASC
+```
+
+### Sort with Pagination
+
+```bash
+# Get first 10 users sorted by creation date
+GET /users?sort=createdAt,DESC&limit=10&page=1
+
+# Get next 10 users
+GET /users?sort=createdAt,DESC&limit=10&page=2
+```
+
+<Tip>
+  Always use the same sort order across paginated requests to ensure consistent results.
+</Tip>
+
+### Sort with Field Selection
+
+```bash
+# Get specific fields sorted
+GET /users?fields=id,name,email&sort=name,ASC
+```
+
+### Complete Example
+
+```bash
+GET /products?filter=category||eq||electronics&filter=inStock||eq||true&sort=price,ASC&fields=id,name,price&limit=20
+```
+
+This request:
+1. Filters electronics products that are in stock
+2. Sorts by price (lowest first)
+3. Returns only id, name, and price fields
+4. Limits results to 20 items
+
+## Sorting Nested Fields
+
+You can sort by fields in related entities using dot notation:
+
+```bash
+# Sort users by profile city
+GET /users?join=profile&sort=profile.city,ASC
+
+# Sort posts by author name
+GET /posts?join=author&sort=author.name,ASC
+
+# Sort orders by customer email
+GET /orders?join=customer&sort=customer.email,ASC
+```
+
+<Note>
+  When sorting by nested fields, make sure to include the appropriate `join` parameter to load the relation.
+</Note>
+
+## Common Sorting Patterns
+
+### Latest First
+
+```bash
+# Most recent posts
+GET /posts?sort=createdAt,DESC
+
+# Latest user registrations
+GET /users?sort=createdAt,DESC
+```
+
+### Most Popular
+
+```bash
+# Most liked posts
+GET /posts?sort=likesCount,DESC
+
+# Most viewed articles
+GET /articles?sort=viewCount,DESC
+```
+
+### Alphabetical Lists
+
+```bash
+# User directory (A-Z)
+GET /users?sort=lastName,ASC&sort=firstName,ASC
+
+# Product catalog
+GET /products?sort=name,ASC
+```
+
+### Priority/Status Based
+
+```bash
+# High priority tasks first
+GET /tasks?sort=priority,DESC&sort=dueDate,ASC
+
+# Pending orders first
+GET /orders?sort=status,ASC&sort=createdAt,DESC
+```
+
+## Error Handling
+
+Invalid sort parameters will throw a `RequestQueryException`:
+
+```bash
+# Missing order
+GET /users?sort=name
+# Error: Invalid sort order. ASC,DESC expected
+
+# Invalid order (lowercase)
+GET /users?sort=name,asc
+# Error: Invalid sort order. ASC,DESC expected
+
+# Invalid order value
+GET /users?sort=name,ASCENDING
+# Error: Invalid sort order. ASC,DESC expected
+
+# Empty field
+GET /users?sort=,ASC
+# Error: Invalid sort field. String expected
+```
+
+## Performance Considerations
+
+### Database Indexes
+
+For optimal performance, create database indexes on frequently sorted fields:
+
+```typescript
+// TypeORM example
+@Entity()
+@Index(['createdAt'])  // Index for sorting by creation date
+export class Post {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  title: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+}
+```
+
+### Composite Indexes
+
+For multi-field sorts, consider composite indexes:
+
+```typescript
+@Entity()
+@Index(['status', 'priority', 'createdAt'])  // Composite index
+export class Task {
+  @Column()
+  status: string;
+
+  @Column()
+  priority: number;
+
+  @CreateDateColumn()
+  createdAt: Date;
+}
+```
+
+### Avoid Sorting Large Datasets
+
+```bash
+# Bad: Sort without limit
+GET /users?sort=name,ASC
+
+# Good: Sort with pagination
+GET /users?sort=name,ASC&limit=50
+```
+
+Always combine sorting with pagination to limit the dataset size.
+
+## Practical Examples
+
+### User Management Dashboard
+
+```bash
+# Show newest users first
+GET /users?sort=createdAt,DESC&limit=50
+
+# Show users alphabetically
+GET /users?sort=lastName,ASC&sort=firstName,ASC
+
+# Show most active users
+GET /users?sort=loginCount,DESC&filter=isActive||eq||true
+```
+
+### E-commerce Product Listing
+
+```bash
+# Price: Low to High
+GET /products?filter=category||eq||electronics&sort=price,ASC
+
+# Price: High to Low
+GET /products?filter=category||eq||electronics&sort=price,DESC
+
+# Most Popular
+GET /products?sort=salesCount,DESC&limit=10
+
+# Newest Arrivals
+GET /products?sort=createdAt,DESC&limit=20
+```
+
+### Blog/Content Management
+
+```bash
+# Latest posts
+GET /posts?filter=status||eq||published&sort=publishedAt,DESC
+
+# Most commented posts
+GET /posts?sort=commentsCount,DESC&limit=10
+
+# Posts by category, then date
+GET /posts?sort=category,ASC&sort=publishedAt,DESC
+```
+
+### Task Management
+
+```bash
+# High priority tasks first, then by due date
+GET /tasks?filter=status||eq||pending&sort=priority,DESC&sort=dueDate,ASC
+
+# Recently updated tasks
+GET /tasks?sort=updatedAt,DESC
+
+# Overdue tasks first
+GET /tasks?filter=dueDate||lt||2024-01-01&sort=dueDate,ASC
+```
+
+## Best Practices
+
+1. **Always specify sort order**: Include both field and order (ASC/DESC)
+2. **Use consistent sorting**: Maintain the same sort order across paginated requests
+3. **Index sorted fields**: Add database indexes to commonly sorted fields
+4. **Combine with pagination**: Always limit results when sorting
+5. **Default to DESC for timestamps**: Use `sort=createdAt,DESC` to show newest items first
+6. **Consider multiple sorts**: Use multiple sort parameters for ties (e.g., same priority)
+7. **Document default sorting**: Let API consumers know the default sort behavior
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Pagination" icon="list-ol" href="./pagination">
+    Learn how to paginate sorted results
+  </Card>
+  <Card title="Filtering" icon="filter" href="./filtering">
+    Combine sorting with filters
+  </Card>
+  <Card title="Relations" icon="link" href="./relations">
+    Sort by fields in related entities
+  </Card>
+  <Card title="Query Parameters" icon="bars" href="./query-params">
+    Overview of all query parameters
+  </Card>
+</CardGroup>

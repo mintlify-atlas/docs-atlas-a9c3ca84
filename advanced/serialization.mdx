@@ -1,0 +1,440 @@
+---
+title: 'Serialization'
+description: 'Control response serialization and transform data with DTOs'
+icon: 'filter'
+---
+
+## Overview
+
+Serialization allows you to transform entity data before sending responses. Use custom DTOs (Data Transfer Objects) to:
+
+- Hide sensitive fields
+- Transform data formats
+- Add computed properties
+- Control response structure for different operations
+
+## Basic Usage
+
+Define a response DTO and apply it to your controller:
+
+```typescript get-company-response.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { Exclude } from 'class-transformer';
+
+export class GetCompanyResponseDto {
+  @ApiProperty({ type: 'number' })
+  id: string;
+
+  @ApiProperty({ type: 'string' })
+  name: string;
+
+  @ApiProperty({ type: 'string' })
+  domain: string;
+
+  @Exclude()
+  createdAt: any;
+
+  @Exclude()
+  updatedAt: any;
+}
+```
+
+```typescript serialize.ts
+import { SerializeOptions } from '@nestjsx/crud';
+import { GetCompanyResponseDto } from './get-company-response.dto';
+
+export const serialize: SerializeOptions = {
+  get: GetCompanyResponseDto,
+};
+```
+
+```typescript companies.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { Company } from './company.entity';
+import { CompaniesService } from './companies.service';
+import { serialize } from './responses';
+
+@Crud({
+  model: { type: Company },
+  serialize,
+})
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+<Note>
+The `@Exclude()` decorator from `class-transformer` hides fields from the response.
+</Note>
+
+## Serialization Options
+
+You can define different DTOs for each operation:
+
+```typescript
+import { SerializeOptions } from '@nestjsx/crud';
+import { GetNoteResponseDto } from './get-note-response.dto';
+import { CreateNoteResponseDto } from './create-note-response.dto';
+import { UpdateNoteResponseDto } from './update-note-response.dto';
+import { DeleteNoteResponseDto } from './delete-note-response.dto';
+
+export const serialize: SerializeOptions = {
+  get: GetNoteResponseDto,           // For getOne
+  getMany: GetNoteResponseDto,       // For getMany (uses same DTO)
+  create: CreateNoteResponseDto,     // For createOne
+  createMany: CreateNoteResponseDto, // For createMany
+  update: UpdateNoteResponseDto,     // For updateOne
+  replace: UpdateNoteResponseDto,    // For replaceOne
+  delete: DeleteNoteResponseDto,     // For deleteOne
+  recover: GetNoteResponseDto,       // For recoverOne
+};
+```
+
+### Available Options
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `get` | `Type<any> \| false` | DTO for `getOne` operation |
+| `getMany` | `Type<any> \| false` | DTO for `getMany` operation |
+| `create` | `Type<any> \| false` | DTO for `createOne` operation |
+| `createMany` | `Type<any> \| false` | DTO for `createMany` operation |
+| `update` | `Type<any> \| false` | DTO for `updateOne` operation |
+| `replace` | `Type<any> \| false` | DTO for `replaceOne` operation |
+| `delete` | `Type<any> \| false` | DTO for `deleteOne` operation |
+| `recover` | `Type<any> \| false` | DTO for `recoverOne` operation |
+
+<Tip>
+Set any option to `false` to disable serialization for that operation and return the raw entity.
+</Tip>
+
+## Response DTOs
+
+### Simple Response DTO
+
+Control which fields are returned:
+
+```typescript get-note-response.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNumber } from 'class-validator';
+
+export class GetNoteResponseDto {
+  @ApiProperty({ type: 'number' })
+  @IsNumber()
+  id: string;
+
+  @ApiProperty({ type: 'number' })
+  @IsNumber()
+  revisionId: string;
+  
+  // Other fields from the entity are automatically excluded
+}
+```
+
+### Delete Response DTO
+
+Customize delete responses:
+
+```typescript delete-device-response.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { Exclude } from 'class-transformer';
+
+export class DeleteDeviceResponseDto {
+  @ApiProperty({ type: 'string' })
+  deviceKey: string;
+
+  @Exclude()
+  description?: string;
+}
+```
+
+Use with the `returnDeleted` option:
+
+```typescript devices.controller.ts
+@Crud({
+  model: { type: Device },
+  serialize: {
+    delete: DeleteDeviceResponseDto,
+  },
+  routes: {
+    deleteOneBase: {
+      returnDeleted: true,
+    },
+  },
+})
+@Controller('devices')
+export class DevicesController {
+  constructor(public service: DevicesService) {}
+}
+```
+
+## Using class-transformer
+
+Leverage `class-transformer` decorators for advanced transformations:
+
+### Exclude Fields
+
+```typescript
+import { Exclude } from 'class-transformer';
+
+export class UserResponseDto {
+  id: number;
+  email: string;
+  
+  @Exclude()
+  password: string;
+  
+  @Exclude()
+  refreshToken: string;
+}
+```
+
+### Expose Fields
+
+```typescript
+import { Expose } from 'class-transformer';
+
+export class UserResponseDto {
+  @Expose()
+  id: number;
+  
+  @Expose()
+  email: string;
+  
+  // All other fields are excluded
+}
+```
+
+### Transform Values
+
+```typescript
+import { Transform } from 'class-transformer';
+
+export class ProductResponseDto {
+  id: number;
+  
+  @Transform(({ value }) => value.toUpperCase())
+  name: string;
+  
+  @Transform(({ value }) => parseFloat(value).toFixed(2))
+  price: number;
+}
+```
+
+### Conditional Serialization
+
+```typescript
+import { Exclude, Expose } from 'class-transformer';
+
+export class UserResponseDto {
+  id: number;
+  email: string;
+  
+  @Expose({ groups: ['admin'] })
+  role: string;
+  
+  @Exclude({ toPlainOnly: true })
+  password: string;
+}
+```
+
+## Groups
+
+Use groups with `@CrudAuth()` for role-based serialization:
+
+```typescript user-response.dto.ts
+import { Expose } from 'class-transformer';
+
+export class UserResponseDto {
+  @Expose()
+  id: number;
+  
+  @Expose()
+  email: string;
+  
+  @Expose({ groups: ['admin'] })
+  internalNotes: string;
+  
+  @Expose({ groups: ['admin', 'manager'] })
+  salary: number;
+}
+```
+
+```typescript users.controller.ts
+import { Crud, CrudAuth } from '@nestjsx/crud';
+
+@Crud({
+  model: { type: User },
+  serialize: {
+    get: UserResponseDto,
+  },
+})
+@CrudAuth({
+  groups: (req) => {
+    if (req.user.role === 'admin') return ['admin'];
+    if (req.user.role === 'manager') return ['manager'];
+    return [];
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Disabling Serialization
+
+Disable serialization for specific operations:
+
+```typescript
+@Crud({
+  model: { type: User },
+  serialize: {
+    get: false,     // Return raw entity for getOne
+    getMany: false, // Return raw entities for getMany
+    update: UserResponseDto, // Still serialize updates
+  },
+})
+```
+
+## Global Serialization Settings
+
+Disable serialization globally:
+
+```typescript main.ts
+import { CrudConfigService } from '@nestjsx/crud';
+
+CrudConfigService.load({
+  serialize: {
+    get: false,
+    getMany: false,
+    // Other operations...
+  },
+});
+```
+
+<Warning>
+Disabling serialization globally affects all controllers unless overridden.
+</Warning>
+
+## Nested Objects
+
+Handle nested entities in responses:
+
+```typescript
+import { Type } from 'class-transformer';
+
+class CompanyDto {
+  id: number;
+  name: string;
+}
+
+export class UserResponseDto {
+  id: number;
+  email: string;
+  
+  @Type(() => CompanyDto)
+  company: CompanyDto;
+}
+```
+
+## Complete Example
+
+Here's a full serialization setup:
+
+```typescript responses/get-user-response.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import { Exclude, Expose, Transform, Type } from 'class-transformer';
+
+class ProfileDto {
+  @ApiProperty()
+  firstName: string;
+  
+  @ApiProperty()
+  lastName: string;
+  
+  @Expose()
+  @Transform(({ obj }) => `${obj.firstName} ${obj.lastName}`)
+  fullName: string;
+}
+
+export class GetUserResponseDto {
+  @ApiProperty({ type: 'number' })
+  id: number;
+
+  @ApiProperty({ type: 'string' })
+  email: string;
+  
+  @ApiProperty({ type: () => ProfileDto })
+  @Type(() => ProfileDto)
+  profile: ProfileDto;
+  
+  @Exclude()
+  password: string;
+  
+  @Exclude()
+  createdAt: Date;
+  
+  @Exclude()
+  updatedAt: Date;
+}
+```
+
+```typescript responses/index.ts
+import { SerializeOptions } from '@nestjsx/crud';
+import { GetUserResponseDto } from './get-user-response.dto';
+
+export const serialize: SerializeOptions = {
+  get: GetUserResponseDto,
+  getMany: GetUserResponseDto,
+};
+```
+
+```typescript users.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+import { serialize } from './responses';
+
+@Crud({
+  model: { type: User },
+  serialize,
+  query: {
+    join: {
+      profile: { eager: true },
+    },
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Always Hide Sensitive Data">
+    Use `@Exclude()` for passwords, tokens, and other sensitive information.
+  </Step>
+  
+  <Step title="Use Swagger Decorators">
+    Add `@ApiProperty()` decorators to response DTOs for accurate API documentation.
+  </Step>
+  
+  <Step title="Reuse DTOs">
+    Use the same DTO for similar operations (e.g., `get` and `getMany`) to maintain consistency.
+  </Step>
+  
+  <Step title="Validate DTOs">
+    Even though these are response DTOs, adding validation decorators helps with type safety.
+  </Step>
+</Steps>
+
+## Related Resources
+
+- [Authentication](/advanced/authentication) - Use groups for role-based serialization
+- [Swagger](/advanced/swagger) - Document your response DTOs
+- [DTOs](/controllers/crud-options#dto-options) - Learn about request DTOs

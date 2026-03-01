@@ -1,0 +1,506 @@
+---
+title: RequestQueryBuilder Methods
+description: Complete reference of all RequestQueryBuilder methods with signatures and examples
+---
+
+## Static Methods
+
+### create()
+
+Creates a new instance of `RequestQueryBuilder`.
+
+```typescript
+static create(params?: CreateQueryParams): RequestQueryBuilder
+```
+
+<ParamField path="params" type="CreateQueryParams" optional>
+  Optional parameters to initialize the query builder
+</ParamField>
+
+**Example:**
+
+```typescript
+// Empty builder
+const qb = RequestQueryBuilder.create();
+
+// With initial parameters
+const qb = RequestQueryBuilder.create({
+  fields: ['id', 'name'],
+  limit: 10
+});
+```
+
+---
+
+### setOptions()
+
+Sets global configuration options for all `RequestQueryBuilder` instances.
+
+```typescript
+static setOptions(options: RequestQueryBuilderOptions): void
+```
+
+<ParamField path="options" type="RequestQueryBuilderOptions" required>
+  Configuration options including delimiters and parameter name mappings
+</ParamField>
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.setOptions({
+  delim: '||',
+  delimStr: ',',
+  paramNamesMap: {
+    fields: 'select',
+    limit: 'per_page'
+  }
+});
+```
+
+---
+
+### getOptions()
+
+Returns the current global configuration options.
+
+```typescript
+static getOptions(): RequestQueryBuilderOptions
+```
+
+**Example:**
+
+```typescript
+const currentOptions = RequestQueryBuilder.getOptions();
+console.log(currentOptions.delim); // '||'
+```
+
+---
+
+## Instance Methods
+
+### query()
+
+Generates the final query string from the built query object.
+
+```typescript
+query(encode?: boolean): string
+```
+
+<ParamField path="encode" type="boolean" default={true}>
+  Whether to URL-encode the query string
+</ParamField>
+
+**Returns:** The generated query string
+
+**Example:**
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name'])
+  .setLimit(10);
+
+const encoded = qb.query();        // fields=id%2Cname&limit=10
+const raw = qb.query(false);       // fields=id,name&limit=10
+```
+
+<Note>
+  If `search()` has been called, the `filter` and `or` parameters will be removed from the query object before generating the string.
+</Note>
+
+---
+
+### select()
+
+Specifies which fields to include in the response.
+
+```typescript
+select(fields: QueryFields): this
+```
+
+<ParamField path="fields" type="string[]" required>
+  Array of field names to select
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.create()
+  .select(['id', 'name', 'email', 'createdAt'])
+  .query();
+
+// Result: fields=id,name,email,createdAt
+```
+
+---
+
+### search()
+
+Sets a complex search condition with support for nested AND/OR logic.
+
+```typescript
+search(s: SCondition): this
+```
+
+<ParamField path="s" type="SCondition" required>
+  Search condition object with field operators and logical combinations
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.create()
+  .search({
+    name: { $cont: 'John' },
+    age: { $gte: 18 },
+    $or: [
+      { status: 'active' },
+      { verified: true }
+    ]
+  })
+  .query();
+```
+
+<Warning>
+  When `search()` is used, it overrides any `filter` or `or` conditions. These will not be included in the final query string.
+</Warning>
+
+---
+
+### setFilter()
+
+Adds filter conditions (all must match - AND logic).
+
+```typescript
+setFilter(f: QueryFilter | QueryFilterArr | Array<QueryFilter | QueryFilterArr>): this
+```
+
+<ParamField path="f" type="QueryFilter | QueryFilterArr | Array">
+  Single filter, filter array, or array of filters
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Types:**
+- `QueryFilter`: `{ field: string, operator: ComparisonOperator, value?: any }`
+- `QueryFilterArr`: `[string, ComparisonOperator, any?]`
+
+**Example:**
+
+```typescript
+// Object notation
+RequestQueryBuilder.create()
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' })
+  .query();
+
+// Array notation
+RequestQueryBuilder.create()
+  .setFilter(['status', '$eq', 'active'])
+  .query();
+
+// Multiple filters
+RequestQueryBuilder.create()
+  .setFilter([
+    { field: 'status', operator: '$eq', value: 'active' },
+    { field: 'verified', operator: '$eq', value: true }
+  ])
+  .query();
+
+// Result: filter=status||$eq||active&filter=verified||$eq||true
+```
+
+---
+
+### setOr()
+
+Adds OR filter conditions (at least one must match).
+
+```typescript
+setOr(f: QueryFilter | QueryFilterArr | Array<QueryFilter | QueryFilterArr>): this
+```
+
+<ParamField path="f" type="QueryFilter | QueryFilterArr | Array">
+  Single filter, filter array, or array of filters
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.create()
+  .setOr([
+    { field: 'priority', operator: '$eq', value: 'high' },
+    { field: 'priority', operator: '$eq', value: 'urgent' }
+  ])
+  .query();
+
+// Result: or=priority||$eq||high&or=priority||$eq||urgent
+```
+
+---
+
+### setJoin()
+
+Joins related entities and optionally selects specific fields from them.
+
+```typescript
+setJoin(j: QueryJoin | QueryJoinArr | Array<QueryJoin | QueryJoinArr>): this
+```
+
+<ParamField path="j" type="QueryJoin | QueryJoinArr | Array">
+  Join configuration(s)
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Types:**
+- `QueryJoin`: `{ field: string, select?: string[] }`
+- `QueryJoinArr`: `[string, string[]?]`
+
+**Example:**
+
+```typescript
+// Join without field selection
+RequestQueryBuilder.create()
+  .setJoin({ field: 'profile' })
+  .query();
+// Result: join=profile
+
+// Join with field selection
+RequestQueryBuilder.create()
+  .setJoin({ field: 'posts', select: ['id', 'title', 'createdAt'] })
+  .query();
+// Result: join=posts||id,title,createdAt
+
+// Multiple joins
+RequestQueryBuilder.create()
+  .setJoin([
+    { field: 'profile' },
+    { field: 'posts', select: ['id', 'title'] },
+    ['comments', ['id', 'text']]
+  ])
+  .query();
+```
+
+---
+
+### sortBy()
+
+Sorts results by one or more fields.
+
+```typescript
+sortBy(s: QuerySort | QuerySortArr | Array<QuerySort | QuerySortArr>): this
+```
+
+<ParamField path="s" type="QuerySort | QuerySortArr | Array">
+  Sort configuration(s)
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Types:**
+- `QuerySort`: `{ field: string, order: 'ASC' | 'DESC' }`
+- `QuerySortArr`: `[string, 'ASC' | 'DESC']`
+
+**Example:**
+
+```typescript
+// Single sort
+RequestQueryBuilder.create()
+  .sortBy({ field: 'createdAt', order: 'DESC' })
+  .query();
+// Result: sort=createdAt,DESC
+
+// Array notation
+RequestQueryBuilder.create()
+  .sortBy(['name', 'ASC'])
+  .query();
+
+// Multiple sort fields
+RequestQueryBuilder.create()
+  .sortBy([
+    { field: 'priority', order: 'DESC' },
+    { field: 'createdAt', order: 'ASC' }
+  ])
+  .query();
+// Result: sort=priority,DESC&sort=createdAt,ASC
+```
+
+---
+
+### setLimit()
+
+Limits the number of results returned.
+
+```typescript
+setLimit(n: number): this
+```
+
+<ParamField path="n" type="number" required>
+  Maximum number of records to return
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.create()
+  .setLimit(25)
+  .query();
+// Result: limit=25
+```
+
+---
+
+### setOffset()
+
+Sets the offset for pagination (number of records to skip).
+
+```typescript
+setOffset(n: number): this
+```
+
+<ParamField path="n" type="number" required>
+  Number of records to skip
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.create()
+  .setLimit(25)
+  .setOffset(50)
+  .query();
+// Result: limit=25&offset=50
+```
+
+---
+
+### setPage()
+
+Sets the page number for page-based pagination.
+
+```typescript
+setPage(n: number): this
+```
+
+<ParamField path="n" type="number" required>
+  Page number (1-based)
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.create()
+  .setLimit(25)
+  .setPage(3)
+  .query();
+// Result: limit=25&page=3
+```
+
+<Note>
+  Use either `setOffset()` or `setPage()` for pagination, not both. Page-based pagination is often more intuitive for users.
+</Note>
+
+---
+
+### resetCache()
+
+Resets the cache by setting the cache parameter to 0.
+
+```typescript
+resetCache(): this
+```
+
+**Returns:** The builder instance for chaining
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.create()
+  .resetCache()
+  .query();
+// Result: cache=0
+```
+
+---
+
+### setIncludeDeleted()
+
+Includes soft-deleted records in the results.
+
+```typescript
+setIncludeDeleted(n: number): this
+```
+
+<ParamField path="n" type="number" required>
+  Value to set (typically 1 to include deleted records)
+</ParamField>
+
+**Returns:** The builder instance for chaining
+
+**Example:**
+
+```typescript
+RequestQueryBuilder.create()
+  .setIncludeDeleted(1)
+  .query();
+// Result: include_deleted=1
+```
+
+---
+
+### cond()
+
+Converts a filter object to a condition string. This is mainly used internally but can be useful for custom implementations.
+
+```typescript
+cond(f: QueryFilter | QueryFilterArr, cond?: 'filter' | 'or' | 'search'): string
+```
+
+<ParamField path="f" type="QueryFilter | QueryFilterArr" required>
+  Filter to convert
+</ParamField>
+
+<ParamField path="cond" type="'filter' | 'or' | 'search'" default="search">
+  Condition type for validation
+</ParamField>
+
+**Returns:** Formatted condition string
+
+**Example:**
+
+```typescript
+const qb = RequestQueryBuilder.create();
+const condStr = qb.cond({ field: 'status', operator: '$eq', value: 'active' });
+// Result: 'status||$eq||active'
+
+const condStr2 = qb.cond(['age', '$gte', 18]);
+// Result: 'age||$gte||18'
+```
+
+---
+
+## Method Chaining
+
+All instance methods (except `query()` and `cond()`) return `this`, allowing for fluent method chaining:
+
+```typescript
+const queryString = RequestQueryBuilder.create()
+  .select(['id', 'name', 'email', 'status'])
+  .setFilter({ field: 'isActive', operator: '$eq', value: true })
+  .setJoin({ field: 'profile', select: ['avatar', 'bio'] })
+  .sortBy({ field: 'createdAt', order: 'DESC' })
+  .setLimit(20)
+  .setPage(1)
+  .query();
+```

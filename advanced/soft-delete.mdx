@@ -1,0 +1,489 @@
+---
+title: 'Soft Delete'
+description: 'Mark records as deleted without removing them from the database'
+icon: 'trash-can-undo'
+---
+
+## Overview
+
+Soft delete allows you to mark records as deleted without permanently removing them from the database. This is useful for:
+
+- Maintaining data history
+- Implementing "trash" functionality
+- Audit trails and compliance
+- Recovering accidentally deleted records
+
+## Setup
+
+### Entity Configuration
+
+Add a `deletedAt` column to your entity:
+
+```typescript user.entity.ts
+import { Entity, Column, PrimaryGeneratedColumn, DeleteDateColumn } from 'typeorm';
+
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  email: string;
+
+  @Column()
+  name: string;
+
+  @DeleteDateColumn()
+  deletedAt?: Date;
+}
+```
+
+<Note>
+The `@DeleteDateColumn()` decorator from TypeORM automatically handles soft delete timestamps.
+</Note>
+
+### Controller Configuration
+
+Enable soft delete in your controller:
+
+```typescript users.controller.ts
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UsersService } from './users.service';
+
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## How It Works
+
+When soft delete is enabled:
+
+### Delete Operation
+
+**Request:**
+```bash
+DELETE /users/1
+```
+
+**Behavior:**
+- Sets `deletedAt` to current timestamp
+- Record remains in database
+- Record is excluded from normal queries
+
+### Query Behavior
+
+By default, soft-deleted records are excluded:
+
+**Request:**
+```bash
+GET /users
+```
+
+**Result:**
+- Returns only records where `deletedAt IS NULL`
+- Soft-deleted records are hidden
+
+### Including Deleted Records
+
+Use the `includeDeleted` query parameter:
+
+**Request:**
+```bash
+GET /users?includeDeleted=1
+```
+
+**Result:**
+- Returns all records, including soft-deleted ones
+- Useful for showing "trash" views
+
+## Recovery Endpoint
+
+The `recoverOne` endpoint restores soft-deleted records:
+
+**Request:**
+```bash
+PATCH /users/1/recover
+```
+
+**Behavior:**
+- Sets `deletedAt` to `null`
+- Record becomes visible in normal queries again
+
+### Configure Recovery Response
+
+Control whether to return the recovered entity:
+
+```typescript users.controller.ts
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+  },
+  routes: {
+    recoverOneBase: {
+      returnRecovered: true, // Return the recovered entity
+    },
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Global Configuration
+
+Enable soft delete globally for all controllers:
+
+```typescript main.ts
+import { CrudConfigService } from '@nestjsx/crud';
+
+CrudConfigService.load({
+  query: {
+    softDelete: true,
+  },
+  routes: {
+    recoverOneBase: {
+      returnRecovered: true,
+    },
+  },
+});
+```
+
+<Warning>
+Ensure all entities have a `deletedAt` column before enabling soft delete globally.
+</Warning>
+
+## Complete Example
+
+Here's a full implementation:
+
+### Entity
+
+```typescript company.entity.ts
+import { 
+  Entity, 
+  Column, 
+  PrimaryGeneratedColumn, 
+  DeleteDateColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+@Entity('companies')
+export class Company {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @Column()
+  domain: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt?: Date;
+}
+```
+
+### Controller
+
+```typescript companies.controller.ts
+import { Controller } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { Crud } from '@nestjsx/crud';
+import { Company } from './company.entity';
+import { CompaniesService } from './companies.service';
+
+@Crud({
+  model: { type: Company },
+  query: {
+    softDelete: true,
+    alwaysPaginate: false,
+    join: {
+      users: {
+        eager: true,
+      },
+    },
+  },
+  routes: {
+    deleteOneBase: {
+      returnDeleted: false, // Don't return entity after delete
+    },
+    recoverOneBase: {
+      returnRecovered: true, // Return entity after recovery
+    },
+  },
+})
+@ApiTags('companies')
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+### Service
+
+```typescript companies.service.ts
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { Company } from './company.entity';
+
+@Injectable()
+export class CompaniesService extends TypeOrmCrudService<Company> {
+  constructor(@InjectRepository(Company) repo) {
+    super(repo);
+  }
+}
+```
+
+## Usage Examples
+
+### Soft Delete a Company
+
+```bash
+curl -X DELETE http://localhost:3000/companies/1
+```
+
+### List Active Companies
+
+```bash
+curl http://localhost:3000/companies
+```
+
+Returns only companies where `deletedAt IS NULL`.
+
+### List All Companies (Including Deleted)
+
+```bash
+curl http://localhost:3000/companies?includeDeleted=1
+```
+
+Returns all companies, including soft-deleted ones.
+
+### Filter Deleted Companies Only
+
+```bash
+curl "http://localhost:3000/companies?includeDeleted=1&filter=deletedAt||$notnull"
+```
+
+### Recover a Company
+
+```bash
+curl -X PATCH http://localhost:3000/companies/1/recover
+```
+
+## With Relationships
+
+Soft delete works with relationships:
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+    join: {
+      company: {
+        eager: true,
+      },
+      projects: {},
+    },
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+<Tip>
+Related entities can also be soft-deleted. Configure each entity independently.
+</Tip>
+
+## Cascade Soft Delete
+
+To soft delete related entities, configure cascades in your entity:
+
+```typescript company.entity.ts
+import { Entity, OneToMany } from 'typeorm';
+import { User } from '../users/user.entity';
+
+@Entity('companies')
+export class Company {
+  // ... other columns
+
+  @OneToMany(() => User, user => user.company, {
+    cascade: ['soft-remove'],
+  })
+  users: User[];
+}
+```
+
+## Disabling Specific Routes
+
+You can disable the recover route if not needed:
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+  },
+  routes: {
+    exclude: ['recoverOneBase'],
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Swagger Documentation
+
+When soft delete is enabled, Swagger automatically documents:
+
+- `includeDeleted` query parameter on `getMany` and `getOne`
+- `PATCH /:id/recover` endpoint for recovery
+- `deletedAt` field in entity schemas
+
+## Hard Delete
+
+To permanently delete records, implement a custom method:
+
+```typescript users.controller.ts
+import { Controller, Delete, Param } from '@nestjs/common';
+import { Crud, Override } from '@nestjsx/crud';
+
+@Crud({
+  model: { type: User },
+  query: {
+    softDelete: true,
+  },
+})
+@Controller('users')
+export class UsersController {
+  constructor(public service: UsersService) {}
+
+  @Delete(':id/permanent')
+  async hardDelete(@Param('id') id: number) {
+    return this.service.hardDelete(id);
+  }
+}
+```
+
+```typescript users.service.ts
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { Repository } from 'typeorm';
+import { User } from './user.entity';
+
+@Injectable()
+export class UsersService extends TypeOrmCrudService<User> {
+  constructor(
+    @InjectRepository(User) 
+    private userRepo: Repository<User>
+  ) {
+    super(userRepo);
+  }
+
+  async hardDelete(id: number) {
+    return this.userRepo.delete(id);
+  }
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use DeleteDateColumn">
+    Always use TypeORM's `@DeleteDateColumn()` decorator for consistency.
+  </Step>
+  
+  <Step title="Index deletedAt">
+    Add an index to `deletedAt` for better query performance.
+  </Step>
+  
+  <Step title="Audit Trail">
+    Combine with `@CreateDateColumn()` and `@UpdateDateColumn()` for complete audit trails.
+  </Step>
+  
+  <Step title="Cleanup Strategy">
+    Implement a cleanup job to hard delete old soft-deleted records if needed.
+  </Step>
+</Steps>
+
+## Database Migration
+
+Add soft delete to existing tables:
+
+```typescript
+import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
+
+export class AddSoftDeleteToUsers1234567890 implements MigrationInterface {
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.addColumn(
+      'users',
+      new TableColumn({
+        name: 'deletedAt',
+        type: 'timestamp',
+        isNullable: true,
+        default: null,
+      })
+    );
+    
+    // Add index for performance
+    await queryRunner.query(
+      'CREATE INDEX "IDX_users_deletedAt" ON "users" ("deletedAt")'
+    );
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query('DROP INDEX "IDX_users_deletedAt"');
+    await queryRunner.dropColumn('users', 'deletedAt');
+  }
+}
+```
+
+## Troubleshooting
+
+### Records Not Being Soft Deleted
+
+Ensure:
+1. Entity has `@DeleteDateColumn()` decorator
+2. `softDelete: true` is set in query options
+3. Service extends `TypeOrmCrudService`
+
+### Deleted Records Still Appearing
+
+Check:
+1. `includeDeleted` parameter isn't being set
+2. Query filters aren't overriding soft delete behavior
+3. Database column exists and is nullable
+
+## Related Resources
+
+- [Query Options](/api/interfaces/query-options) - Learn about query configuration
+- [Routes](/api/interfaces/route-options) - Configure route options
+- [Global Configuration](/advanced/global-config) - Set global soft delete settings

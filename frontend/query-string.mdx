@@ -1,0 +1,552 @@
+---
+title: Query String Format
+description: Understanding the CRUD request query string structure and parameters
+icon: link
+---
+
+NestJS CRUD uses a specific query string format to represent complex database queries. Understanding this format helps you build URLs manually or debug issues with the RequestQueryBuilder.
+
+## Query String Structure
+
+The query string format follows these conventions:
+
+- Parameters are separated by `&`
+- Array values are represented by multiple parameters with the same name
+- The default delimiter for field operators is `||`
+- The default delimiter for array values is `,`
+
+```
+/api/users?fields=id,name,email&filter=status||$eq||active&sort=name,ASC&limit=10
+```
+
+## Available Parameters
+
+### fields (select)
+
+Select specific fields to include in the response.
+
+<CodeGroup>
+```url Basic Fields
+/api/users?fields=id,name,email
+```
+
+```url Nested Fields
+/api/users?fields=id,name,profile.avatar,profile.bio
+```
+
+```url Alternative Syntax
+/api/users?select=id,name,email
+```
+</CodeGroup>
+
+**Format**: `fields=field1,field2,field3`
+
+<Note>
+  If no fields are specified, all fields are returned by default (unless restricted by the backend).
+</Note>
+
+### filter
+
+Apply AND filter conditions.
+
+**Format**: `filter=field||operator||value`
+
+<CodeGroup>
+```url Single Filter
+/api/users?filter=status||$eq||active
+```
+
+```url Multiple Filters (AND)
+/api/users?filter=status||$eq||active&filter=age||$gte||18
+```
+
+```url Array Values
+/api/users?filter=role||$in||admin,moderator
+```
+
+```url Without Value
+/api/users?filter=deletedAt||$isnull
+```
+</CodeGroup>
+
+### or
+
+Apply OR filter conditions.
+
+**Format**: `or=field||operator||value`
+
+```url OR Conditions
+/api/users?or=role||$eq||admin&or=role||$eq||moderator
+```
+
+### Combining AND and OR
+
+```url Mixed Conditions
+/api/users?filter=status||$eq||active&or=role||$eq||admin&or=role||$eq||moderator
+```
+
+This translates to: `(status = 'active') AND (role = 'admin' OR role = 'moderator')`
+
+## Filter Operators
+
+### Equality Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$eq` | Equals | `filter=id||$eq||1` |
+| `$ne` | Not equals | `filter=status||$ne||deleted` |
+| `$eqL` | Equals (case-insensitive) | `filter=name||$eqL||john` |
+| `$neL` | Not equals (case-insensitive) | `filter=role||$neL||admin` |
+
+### Comparison Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$gt` | Greater than | `filter=age||$gt||18` |
+| `$lt` | Lower than | `filter=age||$lt||65` |
+| `$gte` | Greater than or equal | `filter=price||$gte||100` |
+| `$lte` | Lower than or equal | `filter=price||$lte||1000` |
+
+### String Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$starts` | Starts with | `filter=name||$starts||John` |
+| `$ends` | Ends with | `filter=email||$ends||@gmail.com` |
+| `$cont` | Contains | `filter=description||$cont||nestjs` |
+| `$excl` | Excludes | `filter=tags||$excl||deprecated` |
+| `$startsL` | Starts with (case-insensitive) | `filter=name||$startsL||john` |
+| `$endsL` | Ends with (case-insensitive) | `filter=email||$endsL||@GMAIL.COM` |
+| `$contL` | Contains (case-insensitive) | `filter=description||$contL||NestJS` |
+| `$exclL` | Excludes (case-insensitive) | `filter=tags||$exclL||DEPRECATED` |
+
+### Array Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$in` | In array | `filter=status||$in||active,pending` |
+| `$notin` | Not in array | `filter=role||$notin||guest,banned` |
+| `$inL` | In array (case-insensitive) | `filter=role||$inL||Admin,Moderator` |
+| `$notinL` | Not in array (case-insensitive) | `filter=status||$notinL||DELETED,BANNED` |
+
+### Null Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$isnull` | Is null | `filter=deletedAt||$isnull` |
+| `$notnull` | Not null | `filter=email||$notnull` |
+
+### Range Operator
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$between` | Between two values | `filter=age||$between||18,65` |
+
+<Tip>
+  Operators ending with 'L' (like `$eqL`, `$contL`) perform case-insensitive comparisons. Use these for user-friendly search functionality.
+</Tip>
+
+## Advanced Search (s)
+
+The `s` (search) parameter accepts complex nested JSON conditions.
+
+**Format**: `s={"field":"value"}` (URL encoded)
+
+<CodeGroup>
+```url Simple Search
+/api/users?s={"status":"active"}
+```
+
+```url With Operators
+/api/users?s={"age":{"$gte":18,"$lte":65}}
+```
+
+```url OR Conditions
+/api/users?s={"$or":[{"name":{"$cont":"john"}},{"email":{"$cont":"john"}}]}
+```
+
+```url Complex Nested
+/api/users?s={"status":"active","$or":[{"role":"admin"},{"$and":[{"role":"user"},{"verified":true}]}]}
+```
+</CodeGroup>
+
+<Note>
+  When the `s` parameter is present, `filter` and `or` parameters are ignored. The search parameter takes precedence.
+</Note>
+
+### Search Structure Examples
+
+```json Simple Field Matching
+{
+  "name": "John",
+  "status": "active"
+}
+```
+
+```json Field with Operators
+{
+  "age": {
+    "$gte": 18,
+    "$lte": 65
+  },
+  "email": {
+    "$notnull": true
+  }
+}
+```
+
+```json OR Conditions
+{
+  "$or": [
+    { "role": "admin" },
+    { "role": "moderator" }
+  ]
+}
+```
+
+```json AND Conditions
+{
+  "$and": [
+    { "status": "active" },
+    { "verified": true }
+  ]
+}
+```
+
+```json Complex Nested Logic
+{
+  "status": "active",
+  "$or": [
+    { "role": "admin" },
+    {
+      "$and": [
+        { "role": "user" },
+        { "verified": true },
+        { "age": { "$gte": 18 } }
+      ]
+    }
+  ]
+}
+```
+
+## Join Relations
+
+Load related entities with their data.
+
+**Format**: `join=relation` or `join=relation||field1,field2`
+
+<CodeGroup>
+```url Basic Join
+/api/users?join=profile&join=posts
+```
+
+```url Join with Selected Fields
+/api/users?join=profile||id,avatar,bio
+```
+
+```url Nested Relations
+/api/users?join=posts&join=posts.comments
+```
+
+```url Multiple Joins with Fields
+/api/users?join=profile||id,avatar&join=posts||id,title,createdAt
+```
+</CodeGroup>
+
+<Tip>
+  Always specify the fields you need from relations to reduce payload size and improve performance.
+</Tip>
+
+## Sorting
+
+Sort results by one or more fields.
+
+**Format**: `sort=field,ORDER`
+
+Orders: `ASC` (ascending) or `DESC` (descending)
+
+<CodeGroup>
+```url Single Sort
+/api/users?sort=name,ASC
+```
+
+```url Multiple Sorts
+/api/users?sort=status,ASC&sort=createdAt,DESC
+```
+
+```url Sort with Relations
+/api/users?join=profile&sort=profile.createdAt,DESC
+```
+</CodeGroup>
+
+## Pagination
+
+### Limit
+
+Limit the number of results returned.
+
+**Format**: `limit=number`
+
+```url Set Limit
+/api/users?limit=20
+```
+
+**Alternative**: `per_page=20`
+
+### Offset
+
+Skip a specific number of records.
+
+**Format**: `offset=number`
+
+```url Set Offset
+/api/users?limit=20&offset=40
+```
+
+This returns 20 results starting from position 40 (skips first 40).
+
+### Page
+
+Use page-based pagination.
+
+**Format**: `page=number`
+
+```url Page-based Pagination
+/api/users?limit=20&page=3
+```
+
+This returns page 3 with 20 items per page (items 41-60).
+
+<Note>
+  When using `page`, the offset is calculated as `(page - 1) * limit`. You should always specify a `limit` when using `page`.
+</Note>
+
+## Cache Control
+
+Control server-side caching behavior.
+
+**Format**: `cache=0` or `cache=1`
+
+```url Reset Cache
+/api/users?cache=0
+```
+
+Setting `cache=0` forces a fresh database query, bypassing any cached results.
+
+## Soft Deletes
+
+Include soft-deleted records in the results.
+
+**Format**: `include_deleted=number`
+
+<CodeGroup>
+```url Include Deleted Records
+/api/users?include_deleted=1
+```
+
+```url Exclude Deleted (Default)
+/api/users?include_deleted=0
+```
+</CodeGroup>
+
+<Note>
+  This only works if your entity has soft delete enabled. See the [Soft Delete guide](/advanced/soft-delete) for more information.
+</Note>
+
+## Complete Examples
+
+### Example 1: Basic Filtering and Pagination
+
+```url
+/api/users?fields=id,name,email&filter=isActive||$eq||true&sort=name,ASC&limit=20&page=1
+```
+
+**Breakdown:**
+- Select fields: id, name, email
+- Filter: isActive = true
+- Sort by name ascending
+- Return 20 items from page 1
+
+### Example 2: Complex Filtering with Relations
+
+```url
+/api/posts?fields=id,title,publishedAt&join=author||id,name&join=comments&filter=status||$eq||published&filter=publishedAt||$gte||2024-01-01&sort=publishedAt,DESC&limit=10
+```
+
+**Breakdown:**
+- Select post fields: id, title, publishedAt
+- Join author relation (only id and name)
+- Join all comments
+- Filter: status = 'published' AND publishedAt >= '2024-01-01'
+- Sort by publishedAt descending
+- Limit to 10 results
+
+### Example 3: Search with OR Conditions
+
+```url
+/api/users?fields=id,name,email&or=role||$eq||admin&or=role||$eq||moderator&filter=status||$eq||active&sort=createdAt,DESC
+```
+
+**Breakdown:**
+- Select fields: id, name, email
+- Filter: status = 'active' AND (role = 'admin' OR role = 'moderator')
+- Sort by createdAt descending
+
+### Example 4: Advanced Search Query
+
+```url
+/api/products?s={"$or":[{"name":{"$cont":"laptop"}},{"description":{"$cont":"laptop"}}],"price":{"$between":[500,2000]},"inStock":true}&sort=price,ASC
+```
+
+**Breakdown (URL decoded):**
+```json
+{
+  "$or": [
+    { "name": { "$cont": "laptop" } },
+    { "description": { "$cont": "laptop" } }
+  ],
+  "price": { "$between": [500, 2000] },
+  "inStock": true
+}
+```
+- Search: (name contains 'laptop' OR description contains 'laptop') AND price between 500-2000 AND inStock = true
+- Sort by price ascending
+
+### Example 5: Nested Relations
+
+```url
+/api/users?join=posts&join=posts.comments&join=posts.comments.author||id,name&filter=posts.status||$eq||published&sort=posts.publishedAt,DESC
+```
+
+**Breakdown:**
+- Join posts relation
+- Join comments relation from posts
+- Join author relation from comments (only id and name)
+- Filter posts where status = 'published'
+- Sort by post publishedAt descending
+
+## URL Encoding
+
+When building URLs manually, remember to encode special characters:
+
+| Character | Encoded |
+|-----------|----------|
+| `\|\|` | `%7C%7C` |
+| `,` | `%2C` |
+| `$` | `%24` |
+| `{` | `%7B` |
+| `}` | `%7D` |
+| `"` | `%22` |
+| `:` | `%3A` |
+| `[` | `%5B` |
+| `]` | `%5D` |
+
+**Example:**
+
+Unencoded:
+```
+/api/users?filter=name||$cont||John
+```
+
+Encoded:
+```
+/api/users?filter=name%7C%7C%24cont%7C%7CJohn
+```
+
+<Tip>
+  The RequestQueryBuilder handles URL encoding automatically when you call `.query()` or `.query(true)`. Use `.query(false)` for unencoded strings.
+</Tip>
+
+## Custom Parameter Names
+
+You can configure custom parameter names on both frontend and backend:
+
+```typescript Frontend Configuration
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+RequestQueryBuilder.setOptions({
+  paramNamesMap: {
+    fields: 'select',
+    filter: 'where',
+    limit: 'take',
+    offset: 'skip',
+  },
+});
+```
+
+```typescript Backend Configuration
+import { CrudConfigService } from '@nestjsx/crud';
+
+CrudConfigService.load({
+  query: {
+    fields: 'select',
+    filter: 'where',
+    limit: 'take',
+    offset: 'skip',
+  },
+});
+```
+
+With these configurations, your URLs would look like:
+
+```url Custom Parameter Names
+/api/users?select=id,name&where=status||$eq||active&take=10&skip=20
+```
+
+## Debugging Query Strings
+
+### Browser Console
+
+```javascript
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name'])
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' });
+
+// View query object
+console.log('Query Object:', qb.queryObject);
+
+// View encoded query string
+console.log('Encoded:', qb.query());
+
+// View unencoded query string
+console.log('Unencoded:', qb.query(false));
+```
+
+### Network Tab
+
+Inspect the actual request in your browser's Network tab to see the final URL with all query parameters.
+
+## Best Practices
+
+<Steps>
+  <Step title="Use RequestQueryBuilder">
+    Always use RequestQueryBuilder instead of manually constructing query strings to avoid encoding issues and syntax errors.
+  </Step>
+  
+  <Step title="Select Only Needed Fields">
+    Always specify the fields you need rather than fetching all fields, especially for large entities.
+  </Step>
+  
+  <Step title="Limit Joined Relations">
+    When joining relations, specify which fields to include to reduce payload size.
+  </Step>
+  
+  <Step title="Use Pagination">
+    Always implement pagination for list endpoints to prevent performance issues with large datasets.
+  </Step>
+  
+  <Step title="Index Filtered Fields">
+    Ensure database indexes exist on fields frequently used in filters and sorts for better performance.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="RequestQueryBuilder" icon="hammer" href="/frontend/request-builder">
+    Learn how to use the RequestQueryBuilder class
+  </Card>
+  <Card title="Controllers" icon="server" href="/controllers">
+    Set up CRUD controllers to handle these queries
+  </Card>
+</CardGroup>

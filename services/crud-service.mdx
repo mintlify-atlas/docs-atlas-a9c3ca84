@@ -1,0 +1,442 @@
+---
+title: "CrudService"
+description: "The abstract base class that defines the contract for CRUD service implementations"
+---
+
+## Overview
+
+The `CrudService` is an abstract class that defines the interface for all CRUD service implementations. It provides utility methods for pagination, error handling, and common operations that are shared across different ORM implementations.
+
+## Abstract Class Definition
+
+```typescript
+export abstract class CrudService<T> {
+  // Utility methods
+  throwBadRequestException(msg?: unknown): BadRequestException
+  throwNotFoundException(name: string): NotFoundException
+  createPageInfo(data: T[], total: number, limit: number, offset: number): GetManyDefaultResponse<T>
+  decidePagination(parsed: ParsedRequestParams, options: CrudRequestOptions): boolean
+  getTake(query: ParsedRequestParams, options: QueryOptions): number | null
+  getSkip(query: ParsedRequestParams, take: number): number | null
+  getPrimaryParams(options: CrudRequestOptions): string[]
+
+  // Abstract methods to be implemented
+  abstract getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]>
+  abstract getOne(req: CrudRequest): Promise<T>
+  abstract createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+  abstract createMany(req: CrudRequest, dto: CreateManyDto): Promise<T[]>
+  abstract updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+  abstract replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+  abstract deleteOne(req: CrudRequest): Promise<void | T>
+  abstract recoverOne(req: CrudRequest): Promise<void | T>
+}
+```
+
+## Utility Methods
+
+### throwBadRequestException
+
+Throws a standardized BadRequestException with an optional message.
+
+```typescript
+throwBadRequestException(msg?: unknown): BadRequestException
+```
+
+<ParamField path="msg" type="unknown">
+  Optional error message to include in the exception.
+</ParamField>
+
+<ResponseField name="throws" type="BadRequestException">
+  Always throws a BadRequestException.
+</ResponseField>
+
+**Example:**
+
+```typescript
+if (!dto || Object.keys(dto).length === 0) {
+  this.throwBadRequestException('Empty data. Nothing to save.');
+}
+```
+
+### throwNotFoundException
+
+Throws a standardized NotFoundException with the entity name.
+
+```typescript
+throwNotFoundException(name: string): NotFoundException
+```
+
+<ParamField path="name" type="string" required>
+  The name of the entity that was not found.
+</ParamField>
+
+<ResponseField name="throws" type="NotFoundException">
+  Always throws a NotFoundException with the format: "{name} not found".
+</ResponseField>
+
+**Example:**
+
+```typescript
+const entity = await repository.findOne(id);
+if (!entity) {
+  this.throwNotFoundException('User');
+  // Throws: NotFoundException: "User not found"
+}
+```
+
+### createPageInfo
+
+Wraps entity data in a paginated response object with metadata.
+
+```typescript
+createPageInfo(
+  data: T[],
+  total: number,
+  limit: number,
+  offset: number
+): GetManyDefaultResponse<T>
+```
+
+<ParamField path="data" type="T[]" required>
+  The array of entities for the current page.
+</ParamField>
+
+<ParamField path="total" type="number" required>
+  The total number of entities across all pages.
+</ParamField>
+
+<ParamField path="limit" type="number" required>
+  The maximum number of entities per page.
+</ParamField>
+
+<ParamField path="offset" type="number" required>
+  The number of entities to skip (for pagination).
+</ParamField>
+
+<ResponseField name="return" type="GetManyDefaultResponse<T>">
+  An object containing:
+  - `data`: The entity array
+  - `count`: Number of entities in the current page
+  - `total`: Total number of entities
+  - `page`: Current page number (1-based)
+  - `pageCount`: Total number of pages
+</ResponseField>
+
+**Example:**
+
+```typescript
+const [data, total] = await queryBuilder.getManyAndCount();
+const limit = 10;
+const offset = 0;
+
+return this.createPageInfo(data, total, limit, offset);
+// Returns:
+// {
+//   data: [...],
+//   count: 10,
+//   total: 95,
+//   page: 1,
+//   pageCount: 10
+// }
+```
+
+<Note>
+You can override this method to customize the pagination response format for your application.
+</Note>
+
+### decidePagination
+
+Determines whether pagination should be applied to a query.
+
+```typescript
+decidePagination(
+  parsed: ParsedRequestParams,
+  options: CrudRequestOptions
+): boolean
+```
+
+<ParamField path="parsed" type="ParsedRequestParams" required>
+  The parsed request parameters from the query string.
+</ParamField>
+
+<ParamField path="options" type="CrudRequestOptions" required>
+  The CRUD options configured for the controller.
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  Returns `true` if pagination should be applied, `false` otherwise.
+</ResponseField>
+
+**Logic:**
+- Returns `true` if `alwaysPaginate` is enabled in options
+- Returns `true` if `page` or `offset` is specified in the request
+- Returns `false` otherwise
+
+**Example:**
+
+```typescript
+if (this.decidePagination(parsed, options)) {
+  const [data, total] = await builder.getManyAndCount();
+  return this.createPageInfo(data, total, limit, offset);
+} else {
+  return builder.getMany();
+}
+```
+
+### getTake
+
+Calculates the number of entities to fetch based on request parameters and configured limits.
+
+```typescript
+getTake(
+  query: ParsedRequestParams,
+  options: QueryOptions
+): number | null
+```
+
+<ParamField path="query" type="ParsedRequestParams" required>
+  The parsed request parameters.
+</ParamField>
+
+<ParamField path="options" type="QueryOptions" required>
+  The query options from the controller configuration.
+</ParamField>
+
+<ResponseField name="return" type="number | null">
+  The number of entities to fetch, or null if no limit should be applied.
+</ResponseField>
+
+**Priority Order:**
+1. Request `limit` parameter (capped by `maxLimit` if set)
+2. Configured `limit` option (capped by `maxLimit` if set)
+3. Configured `maxLimit` option
+4. `null` (no limit)
+
+**Example:**
+
+```typescript
+const take = this.getTake(parsed, options.query);
+if (isFinite(take)) {
+  builder.take(take);
+}
+```
+
+### getSkip
+
+Calculates the number of entities to skip for pagination.
+
+```typescript
+getSkip(
+  query: ParsedRequestParams,
+  take: number
+): number | null
+```
+
+<ParamField path="query" type="ParsedRequestParams" required>
+  The parsed request parameters.
+</ParamField>
+
+<ParamField path="take" type="number" required>
+  The number of entities per page (from `getTake`).
+</ParamField>
+
+<ResponseField name="return" type="number | null">
+  The number of entities to skip, or null if no offset should be applied.
+</ResponseField>
+
+**Logic:**
+- If `page` is specified: returns `take * (page - 1)`
+- If `offset` is specified: returns the `offset` value
+- Otherwise: returns `null`
+
+**Example:**
+
+```typescript
+const take = this.getTake(parsed, options.query);
+const skip = this.getSkip(parsed, take);
+
+if (isFinite(skip)) {
+  builder.skip(skip);
+}
+```
+
+### getPrimaryParams
+
+Extracts primary parameter field names from the CRUD options.
+
+```typescript
+getPrimaryParams(options: CrudRequestOptions): string[]
+```
+
+<ParamField path="options" type="CrudRequestOptions" required>
+  The CRUD request options.
+</ParamField>
+
+<ResponseField name="return" type="string[]">
+  An array of primary parameter field names.
+</ResponseField>
+
+**Example:**
+
+```typescript
+const primaryParams = this.getPrimaryParams(req.options);
+// Returns: ['id'] or ['userId', 'projectId'] for composite keys
+
+req.parsed.search = primaryParams.reduce(
+  (acc, p) => ({ ...acc, [p]: saved[p] }),
+  {}
+);
+```
+
+## Abstract Methods
+
+These methods must be implemented by concrete service classes:
+
+### getMany
+
+```typescript
+abstract getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]>
+```
+
+Retrieves multiple entities based on request parameters.
+
+### getOne
+
+```typescript
+abstract getOne(req: CrudRequest): Promise<T>
+```
+
+Retrieves a single entity.
+
+### createOne
+
+```typescript
+abstract createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+Creates a single entity.
+
+### createMany
+
+```typescript
+abstract createMany(req: CrudRequest, dto: CreateManyDto): Promise<T[]>
+```
+
+Creates multiple entities.
+
+### updateOne
+
+```typescript
+abstract updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+Updates a single entity (PATCH operation).
+
+### replaceOne
+
+```typescript
+abstract replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+Replaces a single entity (PUT operation).
+
+### deleteOne
+
+```typescript
+abstract deleteOne(req: CrudRequest): Promise<void | T>
+```
+
+Deletes a single entity.
+
+### recoverOne
+
+```typescript
+abstract recoverOne(req: CrudRequest): Promise<void | T>
+```
+
+Recovers a soft-deleted entity.
+
+## Usage in Custom Implementations
+
+When creating a custom CRUD service for a different ORM or data source, extend the `CrudService` class:
+
+```typescript
+import { CrudService } from '@nestjsx/crud';
+
+export class MongoCrudService<T> extends CrudService<T> {
+  constructor(private model: Model<T>) {
+    super();
+  }
+
+  async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]> {
+    const { parsed, options } = req;
+    const query = this.model.find();
+    
+    // Apply filters, sorting, pagination
+    const total = await this.model.countDocuments();
+    const data = await query.exec();
+    
+    if (this.decidePagination(parsed, options)) {
+      const limit = this.getTake(parsed, options.query) || total;
+      const offset = this.getSkip(parsed, limit) || 0;
+      return this.createPageInfo(data, total, limit, offset);
+    }
+    
+    return data;
+  }
+
+  // Implement other abstract methods...
+}
+```
+
+## Type Parameters
+
+<ParamField path="T" type="generic" required>
+  The entity type that this service manages. Should be your entity/model class.
+</ParamField>
+
+## Interfaces
+
+### GetManyDefaultResponse
+
+```typescript
+interface GetManyDefaultResponse<T> {
+  data: T[];           // Array of entities
+  count: number;       // Number of entities in current page
+  total: number;       // Total number of entities
+  page: number;        // Current page number (1-based)
+  pageCount: number;   // Total number of pages
+}
+```
+
+### CrudRequest
+
+```typescript
+interface CrudRequest {
+  parsed: ParsedRequestParams;  // Parsed query parameters
+  options: CrudRequestOptions;  // Controller configuration
+}
+```
+
+## Best Practices
+
+<Note>
+**Consistent Error Handling**: Always use the provided `throwBadRequestException` and `throwNotFoundException` methods for consistent error messages across your application.
+</Note>
+
+<Note>
+**Override createPageInfo**: If your application uses a different pagination format (e.g., cursor-based pagination), override the `createPageInfo` method to match your needs.
+</Note>
+
+<Warning>
+When implementing abstract methods, ensure you handle all edge cases including:
+- Empty results
+- Invalid input data
+- Missing required fields
+- Validation errors
+</Warning>
+
+## See Also
+
+- [TypeOrmCrudService](/services/typeorm-service) - TypeORM implementation
+- [Custom Service](/services/custom-service) - Creating custom implementations

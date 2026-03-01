@@ -1,0 +1,190 @@
+---
+title: RequestQueryBuilder Overview
+description: Build complex REST API queries with a fluent, type-safe interface
+---
+
+## Introduction
+
+The `RequestQueryBuilder` class provides a fluent API for constructing complex query strings for NestJS CRUD operations. It supports filtering, sorting, pagination, field selection, and relation joining with a chainable, type-safe interface.
+
+## Installation
+
+```bash
+npm install @nestjsx/crud-request
+```
+
+## Basic Usage
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const queryString = RequestQueryBuilder.create()
+  .select(['id', 'name', 'email'])
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' })
+  .sortBy({ field: 'createdAt', order: 'DESC' })
+  .setLimit(10)
+  .query();
+
+// Result: fields=id,name,email&filter=status||$eq||active&sort=createdAt,DESC&limit=10
+```
+
+## Creating an Instance
+
+There are two ways to create a `RequestQueryBuilder` instance:
+
+### Static Factory Method
+
+```typescript
+const qb = RequestQueryBuilder.create();
+```
+
+### Constructor
+
+```typescript
+const qb = new RequestQueryBuilder();
+```
+
+### Create from Parameters
+
+You can initialize a query builder with all parameters at once:
+
+```typescript
+const qb = RequestQueryBuilder.create({
+  fields: ['id', 'name', 'email'],
+  filter: { field: 'status', operator: '$eq', value: 'active' },
+  sort: { field: 'createdAt', order: 'DESC' },
+  limit: 10,
+  page: 1
+});
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Field Selection" icon="filter">
+    Choose which fields to return in the response
+  </Card>
+  <Card title="Filtering" icon="filter-list">
+    Filter records with various comparison operators
+  </Card>
+  <Card title="Sorting" icon="arrow-down-a-z">
+    Sort results by one or multiple fields
+  </Card>
+  <Card title="Pagination" icon="table-list">
+    Paginate results with limit/offset or page-based pagination
+  </Card>
+  <Card title="Relations" icon="link">
+    Join and select related entities
+  </Card>
+  <Card title="Search" icon="magnifying-glass">
+    Complex search with AND/OR conditions
+  </Card>
+</CardGroup>
+
+## Configuration
+
+You can configure global options for all `RequestQueryBuilder` instances:
+
+```typescript
+RequestQueryBuilder.setOptions({
+  delim: '||',        // Delimiter for query parts
+  delimStr: ',',      // Delimiter for array values
+  paramNamesMap: {
+    fields: ['fields', 'select'],
+    filter: 'filter',
+    sort: 'sort',
+    limit: ['limit', 'per_page'],
+    offset: 'offset',
+    page: 'page',
+    cache: 'cache',
+    includeDeleted: 'include_deleted'
+  }
+});
+```
+
+<ParamField path="delim" type="string" default="||">
+  Delimiter used to separate parts of a query parameter (e.g., `field||operator||value`)
+</ParamField>
+
+<ParamField path="delimStr" type="string" default=",">
+  Delimiter used to separate array values (e.g., `field1,field2,field3`)
+</ParamField>
+
+<ParamField path="paramNamesMap" type="object">
+  Map of parameter names used in the query string. Each key can be a string or array of strings.
+</ParamField>
+
+## Query Generation
+
+After building your query, generate the query string:
+
+```typescript
+const queryString = qb.query();           // URL-encoded
+const rawQuery = qb.query(false);         // Not encoded
+```
+
+<Note>
+  When `search()` is used, it takes precedence over `filter` and `or` conditions. The filter and or parameters will be ignored in the final query string.
+</Note>
+
+## Advanced Examples
+
+### Complex Filtering with OR Conditions
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setFilter([{ field: 'status', operator: '$eq', value: 'active' }])
+  .setOr([
+    { field: 'priority', operator: '$eq', value: 'high' },
+    { field: 'priority', operator: '$eq', value: 'urgent' }
+  ])
+  .query();
+```
+
+### Joining Relations
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setJoin({ field: 'profile' })
+  .setJoin({ field: 'posts', select: ['id', 'title', 'createdAt'] })
+  .query();
+```
+
+### Search with Complex Conditions
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .search({
+    name: { $cont: 'John' },
+    $or: [
+      { age: { $gte: 18 } },
+      { verified: true }
+    ]
+  })
+  .query();
+```
+
+## Properties
+
+<ResponseField name="queryObject" type="object">
+  The internal object representation of the query before it's converted to a string
+</ResponseField>
+
+<ResponseField name="queryString" type="string">
+  The generated query string (available after calling `query()`)
+</ResponseField>
+
+<ResponseField name="options" type="RequestQueryBuilderOptions">
+  The current configuration options for the builder
+</ResponseField>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Methods Reference" icon="code" href="./methods">
+    Explore all available methods and their signatures
+  </Card>
+  <Card title="Operators Reference" icon="equals" href="./operators">
+    Learn about all query operators and how to use them
+  </Card>
+</CardGroup>

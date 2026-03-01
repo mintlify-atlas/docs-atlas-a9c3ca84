@@ -1,0 +1,582 @@
+---
+title: Select Fields
+description: Control which fields are returned in API responses using field selection in NestJS CRUD
+---
+
+Field selection allows you to specify exactly which fields to return in your API responses. This reduces payload size, improves performance, and gives clients fine-grained control over the data they receive.
+
+## Basic Syntax
+
+The fields parameter uses the following format:
+
+```bash
+fields={field1},{field2},{field3}
+```
+
+- **fields**: Comma-separated list of field names to return
+
+### Aliases
+
+The `fields` parameter has aliases:
+- `fields`
+- `select`
+
+```bash
+# Both are equivalent
+GET /users?fields=id,name,email
+GET /users?select=id,name,email
+```
+
+## Basic Usage
+
+### Single Field
+
+```bash
+# Return only the name field
+GET /users?fields=name
+```
+
+### Multiple Fields
+
+```bash
+# Return id, name, and email fields
+GET /users?fields=id,name,email
+```
+
+<Note>
+  Fields are separated by commas (`,`) with no spaces.
+</Note>
+
+## Default Behavior
+
+Without field selection, all fields are returned:
+
+```bash
+# Returns all fields
+GET /users/1
+
+# Response:
+{
+  "id": 1,
+  "name": "John Doe",
+  "email": "john@example.com",
+  "age": 30,
+  "isActive": true,
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-15T00:00:00.000Z"
+}
+```
+
+With field selection:
+
+```bash
+# Returns only selected fields
+GET /users/1?fields=id,name,email
+
+# Response:
+{
+  "id": 1,
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+```
+
+## Common Use Cases
+
+### Minimal Data for Lists
+
+```bash
+# User list with minimal data
+GET /users?fields=id,name,avatar&limit=50
+```
+
+Perfect for rendering user lists where you only need basic info.
+
+### ID and Name for Dropdowns
+
+```bash
+# For select/dropdown components
+GET /categories?fields=id,name
+GET /users?fields=id,name
+GET /products?fields=id,title
+```
+
+### Excluding Sensitive Fields
+
+```bash
+# Public profile (exclude sensitive data)
+GET /users?fields=id,name,bio,avatar
+# Excludes: email, phone, address, etc.
+```
+
+### Mobile API Responses
+
+```bash
+# Lightweight response for mobile
+GET /posts?fields=id,title,excerpt,thumbnail&limit=20
+# Excludes: full content, author details, etc.
+```
+
+## Field Selection with Relations
+
+Combine field selection with joins:
+
+```bash
+# Select fields from main entity
+GET /posts?fields=id,title,content&join=author
+
+# Select fields from both main and related entities
+GET /posts?fields=id,title,content&join=author||name,email
+```
+
+### Main Entity Fields
+
+The `fields` parameter controls the main entity fields:
+
+```bash
+GET /posts?fields=id,title&join=author||name,email
+```
+
+Returns:
+```json
+{
+  "id": 1,
+  "title": "My Post",
+  "author": {
+    "name": "John Doe",
+    "email": "john@example.com"
+  }
+}
+```
+
+### Related Entity Fields
+
+Use the join syntax to select related entity fields:
+
+```bash
+join={relation}||{field1},{field2}
+```
+
+```bash
+# Select specific fields from author
+GET /posts?join=author||name,avatar
+
+# Select from multiple relations
+GET /posts?join=author||name&join=category||name
+```
+
+## Nested Field Selection
+
+For nested relations, use dot notation in field names:
+
+```bash
+# Select nested fields
+GET /users?fields=id,name,profile.city,profile.country
+
+# Or use join with field selection
+GET /users?fields=id,name&join=profile||city,country
+```
+
+<Tip>
+  Using join syntax is generally more explicit and recommended for selecting related entity fields.
+</Tip>
+
+## Complete Examples
+
+### User Profile API
+
+```bash
+# Public profile
+GET /users/123?fields=id,name,bio,avatar,createdAt
+
+# Profile with location
+GET /users/123?fields=id,name,email&join=profile||city,country
+
+# Minimal user info
+GET /users?fields=id,name&limit=100
+```
+
+### Blog API
+
+```bash
+# Post list with preview
+GET /posts?fields=id,title,excerpt,thumbnail,publishedAt&limit=20
+
+# Full post with author
+GET /posts/456?fields=id,title,content,publishedAt&join=author||name,avatar
+
+# Post titles only
+GET /posts?fields=id,title&sort=publishedAt,DESC
+```
+
+### E-commerce API
+
+```bash
+# Product list
+GET /products?fields=id,name,price,thumbnail,inStock&limit=50
+
+# Product details
+GET /products/789?fields=id,name,description,price,sku&join=category||name
+
+# Minimal product info for cart
+GET /products?fields=id,name,price&filter=id||in||1,2,3
+```
+
+## Combining with Other Parameters
+
+### With Filtering
+
+```bash
+GET /users?filter=isActive||eq||true&fields=id,name,email
+```
+
+### With Sorting
+
+```bash
+GET /products?sort=price,ASC&fields=id,name,price
+```
+
+### With Pagination
+
+```bash
+GET /users?limit=20&page=1&fields=id,name,email&sort=name,ASC
+```
+
+### Complete Query
+
+```bash
+GET /posts?filter=status||eq||published&filter=category||eq||Technology&fields=id,title,excerpt&join=author||name,avatar&sort=publishedAt,DESC&limit=20&page=1
+```
+
+This request:
+1. Filters published posts in Technology category
+2. Returns only id, title, and excerpt from posts
+3. Joins author with name and avatar
+4. Sorts by publish date (newest first)
+5. Returns 20 posts per page
+6. Returns first page
+
+## Performance Benefits
+
+### Reduced Payload Size
+
+```bash
+# ❌ Bad: Returns all fields (large response)
+GET /users?limit=1000
+# Response size: ~500KB
+
+# ✅ Good: Returns only needed fields
+GET /users?fields=id,name&limit=1000
+# Response size: ~50KB (10x smaller)
+```
+
+### Faster Database Queries
+
+Selecting fewer fields can improve database query performance:
+
+```bash
+# ❌ Bad: SELECT * FROM users
+GET /users
+
+# ✅ Good: SELECT id, name, email FROM users
+GET /users?fields=id,name,email
+```
+
+### Reduced Network Transfer
+
+```bash
+# Mobile app: Only load essential data
+GET /posts?fields=id,title,thumbnail&limit=20
+```
+
+Especially important for mobile apps on slow connections.
+
+## Security Considerations
+
+### Protecting Sensitive Fields
+
+Configure which fields can be selected:
+
+```typescript
+import { Crud } from '@nestjsx/crud';
+
+@Crud({
+  model: { type: User },
+  query: {
+    exclude: ['password', 'passwordResetToken'],  // Never allow these
+  },
+})
+@Controller('users')
+export class UsersController {}
+```
+
+### Field Whitelisting
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    allow: ['id', 'name', 'email', 'avatar'],  // Only allow these fields
+  },
+})
+```
+
+<Warning>
+  Always use `exclude` or `allow` in your CRUD configuration to prevent exposure of sensitive fields like passwords, tokens, or internal IDs.
+</Warning>
+
+## Entity Configuration
+
+### TypeORM Example
+
+```typescript
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Exclude } from 'class-transformer';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @Column()
+  email: string;
+
+  @Column()
+  @Exclude()  // Never include in responses
+  password: string;
+
+  @Column()
+  avatar: string;
+
+  @Column()
+  bio: string;
+}
+```
+
+### Controller Configuration
+
+```typescript
+import { Crud, CrudController } from '@nestjsx/crud';
+import { Controller } from '@nestjs/common';
+import { UsersService } from './users.service';
+import { User } from './user.entity';
+
+@Crud({
+  model: {
+    type: User,
+  },
+  query: {
+    exclude: ['password'],  // Never return password
+    allow: ['id', 'name', 'email', 'avatar', 'bio', 'createdAt'],  // Allowed fields
+  },
+})
+@Controller('users')
+export class UsersController implements CrudController<User> {
+  constructor(public service: UsersService) {}
+}
+```
+
+## Frontend Implementation
+
+### React Example
+
+```javascript
+import { useState, useEffect } from 'react';
+
+function UserList() {
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    // Only fetch fields needed for the list
+    fetch('/api/users?fields=id,name,avatar&limit=50')
+      .then(res => res.json())
+      .then(data => setUsers(data));
+  }, []);
+
+  return (
+    <div>
+      {users.map(user => (
+        <div key={user.id}>
+          <img src={user.avatar} alt={user.name} />
+          <span>{user.name}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### JavaScript with RequestQueryBuilder
+
+```javascript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+// Select specific fields
+const query = RequestQueryBuilder.create()
+  .select(['id', 'name', 'email'])
+  .query();
+// Result: fields=id,name,email
+
+fetch(`/api/users?${query}`);
+```
+
+### TypeScript Example
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+interface UserListItem {
+  id: number;
+  name: string;
+  avatar: string;
+}
+
+async function fetchUsers(): Promise<UserListItem[]> {
+  const query = RequestQueryBuilder.create()
+    .select(['id', 'name', 'avatar'])
+    .setLimit(50)
+    .sortBy({ field: 'name', order: 'ASC' })
+    .query();
+
+  const response = await fetch(`/api/users?${query}`);
+  return response.json();
+}
+```
+
+## Common Patterns
+
+### Dropdown/Select Options
+
+```bash
+GET /categories?fields=id,name&sort=name,ASC
+GET /users?fields=id,name&filter=isActive||eq||true
+```
+
+### Search Results
+
+```bash
+GET /products?fields=id,name,price,thumbnail&filter=name||cont||laptop&limit=10
+```
+
+### Table/Grid Display
+
+```bash
+GET /users?fields=id,name,email,status,createdAt&limit=50&sort=createdAt,DESC
+```
+
+### Card/Preview Display
+
+```bash
+GET /posts?fields=id,title,excerpt,thumbnail,author&join=author||name&limit=12
+```
+
+### Autocomplete
+
+```bash
+GET /users?fields=id,name&filter=name||starts||Jo&limit=10
+```
+
+## Validation and Errors
+
+Invalid field parameters will be handled according to your configuration:
+
+```bash
+# If 'secretField' is not in the allow list or is in exclude list
+GET /users?fields=id,name,secretField
+# The secretField will be ignored or throw an error
+```
+
+```typescript
+// Configure strict validation
+@Crud({
+  model: { type: User },
+  query: {
+    allow: ['id', 'name', 'email'],
+    // Any other field will be rejected
+  },
+})
+```
+
+## Best Practices
+
+1. **Always select only needed fields**: Don't default to selecting all fields
+2. **Configure field access**: Use `exclude` or `allow` in your controller
+3. **Protect sensitive data**: Never expose passwords, tokens, or internal fields
+4. **Use TypeScript**: Define interfaces for different field selections
+5. **Document available fields**: Clearly document which fields are available
+6. **Consider mobile clients**: Select minimal fields for mobile endpoints
+7. **Test performance**: Measure the impact of field selection on performance
+8. **Use consistent naming**: Keep field names consistent across your API
+
+## GraphQL-Like Queries
+
+While not as flexible as GraphQL, field selection provides similar benefits:
+
+```bash
+# Similar to GraphQL query:
+# query {
+#   users {
+#     id
+#     name
+#     profile { city }
+#   }
+# }
+
+GET /users?fields=id,name&join=profile||city
+```
+
+## Advanced Examples
+
+### Multi-Level Field Selection
+
+```bash
+# Select fields from nested relations
+GET /users?fields=id,name&join=posts||id,title&join=posts.comments||text
+```
+
+### Dynamic Field Selection
+
+```javascript
+// Allow users to choose fields
+function fetchData(selectedFields) {
+  const fields = selectedFields.join(',');
+  return fetch(`/api/users?fields=${fields}`);
+}
+
+// Usage
+fetchData(['id', 'name', 'email']);
+```
+
+### Conditional Field Loading
+
+```javascript
+// Load more fields when viewing details
+const listFields = 'id,name,avatar';
+const detailFields = 'id,name,email,bio,createdAt,updatedAt';
+
+// List view
+fetch(`/api/users?fields=${listFields}`);
+
+// Detail view
+fetch(`/api/users/123?fields=${detailFields}`);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Relations" icon="link" href="./relations">
+    Select fields from related entities
+  </Card>
+  <Card title="Filtering" icon="filter" href="./filtering">
+    Filter results before selecting fields
+  </Card>
+  <Card title="Pagination" icon="list-ol" href="./pagination">
+    Paginate through selected fields
+  </Card>
+  <Card title="Query Parameters" icon="bars" href="./query-params">
+    Overview of all query parameters
+  </Card>
+</CardGroup>

@@ -1,0 +1,558 @@
+---
+title: Query Operators
+description: Complete reference of all comparison and logical operators supported by RequestQueryBuilder
+---
+
+## Comparison Operators
+
+The RequestQueryBuilder supports a comprehensive set of comparison operators for filtering and searching. Operators are prefixed with `$` to avoid conflicts with field names.
+
+### Equality Operators
+
+#### $eq (Equals)
+
+Matches values that are equal to a specified value.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' })
+  .query();
+
+// With search
+RequestQueryBuilder.create()
+  .search({ status: { $eq: 'active' } })
+  .query();
+```
+
+<ParamField path="value" type="string | number | boolean">
+  The value to match exactly
+</ParamField>
+
+---
+
+#### $ne (Not Equals)
+
+Matches values that are not equal to a specified value.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'status', operator: '$ne', value: 'deleted' })
+  .query();
+```
+
+<ParamField path="value" type="string | number | boolean">
+  The value to exclude
+</ParamField>
+
+---
+
+### Comparison Operators
+
+#### $gt (Greater Than)
+
+Matches values that are greater than a specified value.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'age', operator: '$gt', value: 18 })
+  .query();
+```
+
+---
+
+#### $gte (Greater Than or Equal)
+
+Matches values that are greater than or equal to a specified value.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'price', operator: '$gte', value: 100 })
+  .query();
+```
+
+---
+
+#### $lt (Less Than)
+
+Matches values that are less than a specified value.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'stock', operator: '$lt', value: 10 })
+  .query();
+```
+
+---
+
+#### $lte (Less Than or Equal)
+
+Matches values that are less than or equal to a specified value.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'discount', operator: '$lte', value: 50 })
+  .query();
+```
+
+---
+
+### String Operators
+
+#### $starts (Starts With)
+
+Matches string values that start with a specified substring.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'name', operator: '$starts', value: 'John' })
+  .query();
+```
+
+<Note>
+  String matching is case-sensitive by default. Use the lowercase variants (e.g., `$startsL`) for case-insensitive matching.
+</Note>
+
+---
+
+#### $ends (Ends With)
+
+Matches string values that end with a specified substring.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'email', operator: '$ends', value: '@example.com' })
+  .query();
+```
+
+---
+
+#### $cont (Contains)
+
+Matches string values that contain a specified substring.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'description', operator: '$cont', value: 'urgent' })
+  .query();
+```
+
+---
+
+#### $excl (Excludes)
+
+Matches string values that do not contain a specified substring.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'tags', operator: '$excl', value: 'deprecated' })
+  .query();
+```
+
+---
+
+### Array Operators
+
+#### $in (In Array)
+
+Matches values that are included in a specified array.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ 
+    field: 'status', 
+    operator: '$in', 
+    value: ['active', 'pending', 'review'] 
+  })
+  .query();
+```
+
+<ParamField path="value" type="array">
+  Array of values to match against
+</ParamField>
+
+---
+
+#### $notin (Not In Array)
+
+Matches values that are not included in a specified array.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ 
+    field: 'status', 
+    operator: '$notin', 
+    value: ['deleted', 'archived'] 
+  })
+  .query();
+```
+
+---
+
+### Range Operators
+
+#### $between (Between)
+
+Matches values that fall within a specified range (inclusive).
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ 
+    field: 'age', 
+    operator: '$between', 
+    value: [18, 65] 
+  })
+  .query();
+```
+
+<ParamField path="value" type="[any, any]">
+  Array with two elements: [min, max]
+</ParamField>
+
+---
+
+### Null Operators
+
+#### $isnull (Is Null)
+
+Matches records where the field value is null.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'deletedAt', operator: '$isnull' })
+  .query();
+```
+
+<Note>
+  The `$isnull` and `$notnull` operators do not require a value parameter.
+</Note>
+
+---
+
+#### $notnull (Is Not Null)
+
+Matches records where the field value is not null.
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'publishedAt', operator: '$notnull' })
+  .query();
+```
+
+---
+
+## Case-Insensitive Operators
+
+All string operators have case-insensitive variants with an `L` suffix (for "lowercase").
+
+### $eqL (Equals - Case Insensitive)
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'username', operator: '$eqL', value: 'ADMIN' })
+  .query();
+// Matches: 'admin', 'Admin', 'ADMIN', 'aDmIn'
+```
+
+### $neL (Not Equals - Case Insensitive)
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'role', operator: '$neL', value: 'GUEST' })
+  .query();
+```
+
+### $startsL (Starts With - Case Insensitive)
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'name', operator: '$startsL', value: 'john' })
+  .query();
+// Matches: 'John Doe', 'JOHN Smith', 'johnny'
+```
+
+### $endsL (Ends With - Case Insensitive)
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'email', operator: '$endsL', value: '@EXAMPLE.COM' })
+  .query();
+```
+
+### $contL (Contains - Case Insensitive)
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'title', operator: '$contL', value: 'urgent' })
+  .query();
+// Matches: 'URGENT Task', 'This is urgent', 'Urgently needed'
+```
+
+### $exclL (Excludes - Case Insensitive)
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ field: 'description', operator: '$exclL', value: 'SPAM' })
+  .query();
+```
+
+### $inL (In Array - Case Insensitive)
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ 
+    field: 'category', 
+    operator: '$inL', 
+    value: ['TECH', 'BUSINESS'] 
+  })
+  .query();
+// Matches: 'tech', 'Tech', 'TECH', 'business', 'Business'
+```
+
+### $notinL (Not In Array - Case Insensitive)
+
+```typescript
+RequestQueryBuilder.create()
+  .setFilter({ 
+    field: 'type', 
+    operator: '$notinL', 
+    value: ['SPAM', 'JUNK'] 
+  })
+  .query();
+```
+
+---
+
+## Logical Operators
+
+Logical operators are used with the `search()` method to create complex queries with AND/OR logic.
+
+### $or (Logical OR)
+
+Matches records that satisfy at least one of the specified conditions.
+
+```typescript
+RequestQueryBuilder.create()
+  .search({
+    $or: [
+      { status: 'active' },
+      { priority: { $eq: 'high' } },
+      { createdAt: { $gte: '2024-01-01' } }
+    ]
+  })
+  .query();
+```
+
+<Note>
+  `$or` can be used at the root level or nested within field conditions.
+</Note>
+
+**Nested OR:**
+
+```typescript
+RequestQueryBuilder.create()
+  .search({
+    status: 'active',
+    name: {
+      $or: {
+        $cont: 'John',
+        $starts: 'Jane'
+      }
+    }
+  })
+  .query();
+```
+
+---
+
+### $and (Logical AND)
+
+Matches records that satisfy all of the specified conditions.
+
+```typescript
+RequestQueryBuilder.create()
+  .search({
+    $and: [
+      { status: 'active' },
+      { verified: true },
+      { age: { $gte: 18 } }
+    ]
+  })
+  .query();
+```
+
+**Complex nested conditions:**
+
+```typescript
+RequestQueryBuilder.create()
+  .search({
+    $and: [
+      { status: 'active' },
+      {
+        $or: [
+          { priority: 'high' },
+          { priority: 'urgent' }
+        ]
+      }
+    ]
+  })
+  .query();
+```
+
+<Warning>
+  When using logical operators, note that `$and` and `$or` cannot be used at the same level. The types enforce this constraint to prevent ambiguous queries.
+</Warning>
+
+---
+
+## Sort Operators
+
+Sort operators determine the order of results.
+
+### ASC (Ascending)
+
+Sorts results in ascending order (A-Z, 0-9, oldest to newest).
+
+```typescript
+RequestQueryBuilder.create()
+  .sortBy({ field: 'name', order: 'ASC' })
+  .query();
+```
+
+### DESC (Descending)
+
+Sorts results in descending order (Z-A, 9-0, newest to oldest).
+
+```typescript
+RequestQueryBuilder.create()
+  .sortBy({ field: 'createdAt', order: 'DESC' })
+  .query();
+```
+
+---
+
+## Deprecated Operators
+
+The following operators are deprecated but still supported for backward compatibility. Use the `$` prefixed versions instead.
+
+<Warning>
+  These operators may be removed in future versions. Migrate to the new `$` prefixed operators.
+</Warning>
+
+| Deprecated | Use Instead |
+|------------|-------------|
+| `eq` | `$eq` |
+| `ne` | `$ne` |
+| `gt` | `$gt` |
+| `lt` | `$lt` |
+| `gte` | `$gte` |
+| `lte` | `$lte` |
+| `starts` | `$starts` |
+| `ends` | `$ends` |
+| `cont` | `$cont` |
+| `excl` | `$excl` |
+| `in` | `$in` |
+| `notin` | `$notin` |
+| `isnull` | `$isnull` |
+| `notnull` | `$notnull` |
+| `between` | `$between` |
+
+---
+
+## Operator Type Reference
+
+### CondOperator Enum
+
+```typescript
+enum CondOperator {
+  EQUALS = '$eq',
+  NOT_EQUALS = '$ne',
+  GREATER_THAN = '$gt',
+  LOWER_THAN = '$lt',
+  GREATER_THAN_EQUALS = '$gte',
+  LOWER_THAN_EQUALS = '$lte',
+  STARTS = '$starts',
+  ENDS = '$ends',
+  CONTAINS = '$cont',
+  EXCLUDES = '$excl',
+  IN = '$in',
+  NOT_IN = '$notin',
+  IS_NULL = '$isnull',
+  NOT_NULL = '$notnull',
+  BETWEEN = '$between',
+  EQUALS_LOW = '$eqL',
+  NOT_EQUALS_LOW = '$neL',
+  STARTS_LOW = '$startsL',
+  ENDS_LOW = '$endsL',
+  CONTAINS_LOW = '$contL',
+  EXCLUDES_LOW = '$exclL',
+  IN_LOW = '$inL',
+  NOT_IN_LOW = '$notinL',
+}
+```
+
+**Usage:**
+
+```typescript
+import { CondOperator } from '@nestjsx/crud-request';
+
+RequestQueryBuilder.create()
+  .setFilter({ 
+    field: 'status', 
+    operator: CondOperator.EQUALS, 
+    value: 'active' 
+  })
+  .query();
+```
+
+---
+
+## Advanced Examples
+
+### Combining Multiple Operator Types
+
+```typescript
+RequestQueryBuilder.create()
+  .search({
+    // String matching (case-insensitive)
+    name: { $contL: 'john' },
+    
+    // Range
+    age: { $between: [18, 65] },
+    
+    // Array membership
+    role: { $in: ['admin', 'moderator'] },
+    
+    // Null check
+    deletedAt: { $isnull: true },
+    
+    // Logical OR
+    $or: [
+      { priority: 'high' },
+      { urgent: true }
+    ]
+  })
+  .query();
+```
+
+### Filter vs Search
+
+```typescript
+// Using setFilter (simpler, for basic conditions)
+RequestQueryBuilder.create()
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' })
+  .setFilter({ field: 'age', operator: '$gte', value: 18 })
+  .query();
+// All filters are combined with AND logic
+
+// Using search (more powerful, supports complex logic)
+RequestQueryBuilder.create()
+  .search({
+    status: { $eq: 'active' },
+    $or: [
+      { age: { $gte: 18 } },
+      { verified: true }
+    ]
+  })
+  .query();
+// Supports nested AND/OR conditions
+```

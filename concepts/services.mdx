@@ -1,0 +1,436 @@
+---
+title: Services
+description: Implement CRUD services to handle database operations and business logic
+---
+
+CRUD services extend the base service class to provide database operations. The `@nestjsx/crud-typeorm` package provides `TypeOrmCrudService` with built-in methods for all CRUD operations.
+
+## Basic service
+
+A minimal CRUD service extends `TypeOrmCrudService` and injects a TypeORM repository:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { Company } from './company.entity';
+
+@Injectable()
+export class CompaniesService extends TypeOrmCrudService<Company> {
+  constructor(@InjectRepository(Company) repo) {
+    super(repo);
+  }
+}
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/companies/companies.service.ts:1-13`:
+
+<Note>
+You must pass the injected repository to the `super()` constructor to enable all CRUD operations.
+</Note>
+
+## Service methods
+
+The `TypeOrmCrudService` provides eight main methods that correspond to CRUD operations:
+
+### Read operations
+
+#### getMany()
+
+Retrieve multiple entities with filtering, pagination, sorting, and joins:
+
+```typescript
+public async getMany(req: CrudRequest): Promise<GetManyDefaultResponse<T> | T[]>
+```
+
+Returns either an array of entities or a paginated response object:
+
+```typescript
+interface GetManyDefaultResponse<T> {
+  data: T[];
+  count: number;
+  total: number;
+  page: number;
+  pageCount: number;
+}
+```
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:94-98`:
+
+#### getOne()
+
+Retrieve a single entity by ID:
+
+```typescript
+public async getOne(req: CrudRequest): Promise<T>
+```
+
+Throws `NotFoundException` if the entity doesn't exist.
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:104-106`:
+
+### Create operations
+
+#### createOne()
+
+Create a single entity:
+
+```typescript
+public async createOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+By default, returns the full entity after creation. Set `returnShallow: true` in route options to return only the saved data without additional queries.
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:113-137`:
+
+#### createMany()
+
+Create multiple entities in bulk:
+
+```typescript
+public async createMany(
+  req: CrudRequest,
+  dto: CreateManyDto<T | Partial<T>>
+): Promise<T[]>
+```
+
+Entities are saved in chunks of 50 for optimal performance.
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:144-158`:
+
+### Update operations
+
+#### updateOne()
+
+Partially update an entity (PATCH):
+
+```typescript
+public async updateOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+Merges the DTO with the existing entity and saves. The `allowParamsOverride` option controls whether path parameters can be overwritten by the request body.
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:165-185`:
+
+#### replaceOne()
+
+Fully replace an entity (PUT):
+
+```typescript
+public async replaceOne(req: CrudRequest, dto: T | Partial<T>): Promise<T>
+```
+
+Replaces the entire entity with the DTO. Unlike `updateOne()`, this doesn't merge with existing data.
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:202-231`:
+
+### Delete operations
+
+#### deleteOne()
+
+Delete an entity (hard or soft delete):
+
+```typescript
+public async deleteOne(req: CrudRequest): Promise<void | T>
+```
+
+Behavior depends on configuration:
+- If `softDelete: true` is set in query options, performs a soft delete
+- If `returnDeleted: true` is set in route options, returns the deleted entity
+- Otherwise, performs a hard delete and returns `void`
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:237-248`:
+
+#### recoverOne()
+
+Recover a soft-deleted entity:
+
+```typescript
+public async recoverOne(req: CrudRequest): Promise<T>
+```
+
+Only available when `softDelete: true` is enabled.
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:192-195`:
+
+## Custom business logic
+
+Extend the service to add custom methods or override existing ones:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { CrudRequest } from '@nestjsx/crud';
+import { User } from './user.entity';
+
+@Injectable()
+export class UsersService extends TypeOrmCrudService<User> {
+  constructor(@InjectRepository(User) repo) {
+    super(repo);
+  }
+
+  // Custom method
+  async findByEmail(email: string): Promise<User> {
+    return this.repo.findOne({ where: { email } });
+  }
+
+  // Override built-in method
+  async createOne(req: CrudRequest, dto: Partial<User>): Promise<User> {
+    // Hash password before saving
+    if (dto.password) {
+      dto.password = await this.hashPassword(dto.password);
+    }
+    return super.createOne(req, dto);
+  }
+
+  private async hashPassword(password: string): Promise<string> {
+    // Password hashing logic
+    return password; // Replace with actual hashing
+  }
+}
+```
+
+<Tip>
+Access the underlying TypeORM repository through `this.repo` for custom queries that go beyond CRUD operations.
+</Tip>
+
+## Query builder
+
+The service uses TypeORM's query builder internally. You can access it through the `createBuilder()` method:
+
+```typescript
+public async createBuilder(
+  parsed: ParsedRequestParams,
+  options: CrudRequestOptions,
+  many = true,
+  withDeleted = false
+): Promise<SelectQueryBuilder<T>>
+```
+
+This is useful for complex custom queries:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { Company } from './company.entity';
+
+@Injectable()
+export class CompaniesService extends TypeOrmCrudService<Company> {
+  constructor(@InjectRepository(Company) repo) {
+    super(repo);
+  }
+
+  async findLargeCompanies(minEmployees: number): Promise<Company[]> {
+    const builder = this.repo.createQueryBuilder('company');
+    return builder
+      .leftJoin('company.users', 'user')
+      .groupBy('company.id')
+      .having('COUNT(user.id) >= :min', { min: minEmployees })
+      .getMany();
+  }
+}
+```
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:269-348`:
+
+## Repository access
+
+The service exposes common repository methods for convenience:
+
+```typescript
+const service = new CompaniesService(repo);
+
+// Direct repository access
+await service.findOne({ where: { id: 1 } });
+await service.find({ take: 10 });
+await service.count({ where: { active: true } });
+```
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:70-80`:
+
+```typescript
+public get findOne(): Repository<T>['findOne'] {
+  return this.repo.findOne.bind(this.repo);
+}
+
+public get find(): Repository<T>['find'] {
+  return this.repo.find.bind(this.repo);
+}
+
+public get count(): Repository<T>['count'] {
+  return this.repo.count.bind(this.repo);
+}
+```
+
+## Soft deletes
+
+Enable soft delete support in your entity and controller:
+
+```typescript
+// Entity with soft delete
+import { Entity, Column, DeleteDateColumn } from 'typeorm';
+
+@Entity('companies')
+export class Company {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @DeleteDateColumn({ nullable: true })
+  deletedAt?: Date;
+}
+```
+
+```typescript
+// Controller configuration
+@Crud({
+  model: { type: Company },
+  query: {
+    softDelete: true, // Enable soft delete
+  },
+  routes: {
+    deleteOneBase: {
+      returnDeleted: true, // Return deleted entity
+    },
+  },
+})
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+With soft delete enabled:
+- `DELETE /companies/:id` sets `deletedAt` instead of removing the row
+- Soft-deleted entities are excluded from queries by default
+- `PATCH /companies/:id/recover` restores soft-deleted entities
+- Use `?include_deleted=1` to include soft-deleted entities in results
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:314-318`:
+
+## Validation groups
+
+The service automatically applies validation groups based on the operation:
+
+```typescript
+import { CrudValidationGroups } from '@nestjsx/crud';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import {
+  IsOptional,
+  IsString,
+  IsNotEmpty,
+  IsEmpty,
+  IsNumber,
+} from 'class-validator';
+
+const { CREATE, UPDATE } = CrudValidationGroups;
+
+@Entity('companies')
+export class Company {
+  @IsOptional({ groups: [UPDATE] })
+  @IsEmpty({ groups: [CREATE] })
+  @IsNumber({}, { groups: [UPDATE] })
+  @PrimaryGeneratedColumn()
+  id?: number;
+
+  @IsOptional({ groups: [UPDATE] })
+  @IsNotEmpty({ groups: [CREATE] })
+  @IsString({ always: true })
+  @Column()
+  name: string;
+}
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/companies/company.entity.ts:17-32`:
+
+The service applies:
+- `CREATE` group for `createOne()` and `createMany()`
+- `UPDATE` group for `updateOne()` and `replaceOne()`
+
+<Note>
+Validation happens automatically through NestJS pipes. No additional configuration is needed in the service.
+</Note>
+
+## Security features
+
+The service includes built-in SQL injection protection:
+
+```typescript
+protected sqlInjectionRegEx: RegExp[] = [
+  /(%27)|(\')|(--)|(%23)|(#)/gi,
+  /((%3D)|(=))[^\n]*((%27)|(\')|(--)|(%3B)|(;))/gi,
+  /w*((%27)|(\''))((%6F)|o|(%4F))((%72)|r|(%52))/gi,
+  /((%27)|(\'))union/gi,
+];
+```
+
+From `/home/daytona/workspace/source/packages/crud-typeorm/src/typeorm-crud.service.ts:56-61`:
+
+All query parameters are validated against these patterns before being executed.
+
+## Complete example
+
+Here's a complete service with custom logic:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { CrudRequest } from '@nestjsx/crud';
+import { User } from './user.entity';
+
+@Injectable()
+export class UsersService extends TypeOrmCrudService<User> {
+  constructor(@InjectRepository(User) repo) {
+    super(repo);
+  }
+
+  // Custom query with joins
+  async findActiveUsers(): Promise<User[]> {
+    return this.repo
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.company', 'company')
+      .where('user.isActive = :active', { active: true })
+      .getMany();
+  }
+
+  // Override create to add custom logic
+  async createOne(req: CrudRequest, dto: Partial<User>): Promise<User> {
+    // Normalize email
+    if (dto.email) {
+      dto.email = dto.email.toLowerCase().trim();
+    }
+    
+    // Call base implementation
+    return super.createOne(req, dto);
+  }
+
+  // Override delete for audit logging
+  async deleteOne(req: CrudRequest): Promise<void | User> {
+    const user = await this.getOne(req);
+    console.log(`Deleting user: ${user.email}`);
+    return super.deleteOne(req);
+  }
+}
+```
+
+From `/home/daytona/workspace/source/integration/crud-typeorm/users/users.service.ts:1-13`:
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Controllers" icon="router" href="/concepts/controllers">
+    Learn how to configure CRUD controllers
+  </Card>
+  <Card title="Requests" icon="search" href="/concepts/requests">
+    Understand request parsing and filtering
+  </Card>
+</CardGroup>

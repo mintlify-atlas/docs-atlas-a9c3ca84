@@ -1,0 +1,341 @@
+---
+title: Filtering
+description: Filter your API results with powerful comparison operators in NestJS CRUD
+---
+
+Filtering allows you to retrieve only the data that matches specific conditions. The NestJS CRUD framework provides a comprehensive set of operators for building simple to complex filters.
+
+## Basic Syntax
+
+Filters use the following format:
+
+```bash
+filter={field}||{operator}||{value}
+```
+
+- **field**: The name of the field to filter
+- **operator**: The comparison operator to use
+- **value**: The value to compare against (optional for some operators)
+
+### Example
+
+```bash
+GET /users?filter=name||eq||John
+```
+
+This retrieves all users where the name equals "John".
+
+## Comparison Operators
+
+The framework supports both modern (`$` prefixed) and deprecated operators.
+
+### Equality Operators
+
+| Operator | Modern | Description | Example |
+|----------|--------|-------------|----------|
+| `eq` | `$eq` | Equals | `filter=name||$eq||John` |
+| `ne` | `$ne` | Not equals | `filter=status||$ne||inactive` |
+
+```bash
+# Find users named John
+GET /users?filter=name||$eq||John
+
+# Find users not named John
+GET /users?filter=name||$ne||John
+```
+
+### Comparison Operators
+
+| Operator | Modern | Description | Example |
+|----------|--------|-------------|----------|
+| `gt` | `$gt` | Greater than | `filter=age||$gt||18` |
+| `gte` | `$gte` | Greater than or equal | `filter=age||$gte||18` |
+| `lt` | `$lt` | Less than | `filter=price||$lt||100` |
+| `lte` | `$lte` | Less than or equal | `filter=price||$lte||100` |
+
+```bash
+# Find users older than 18
+GET /users?filter=age||$gt||18
+
+# Find products under $100
+GET /products?filter=price||$lte||100
+```
+
+### String Operators
+
+| Operator | Modern | Description | Example |
+|----------|--------|-------------|----------|
+| `starts` | `$starts` | Starts with | `filter=name||$starts||Jo` |
+| `ends` | `$ends` | Ends with | `filter=email||$ends||@gmail.com` |
+| `cont` | `$cont` | Contains | `filter=description||$cont||keyword` |
+| `excl` | `$excl` | Excludes | `filter=name||$excl||test` |
+
+```bash
+# Find users whose name starts with "Jo"
+GET /users?filter=name||$starts||Jo
+
+# Find products containing "laptop" in description
+GET /products?filter=description||$cont||laptop
+
+# Find emails ending with @gmail.com
+GET /users?filter=email||$ends||@gmail.com
+```
+
+### Case-Insensitive String Operators
+
+All string operators have case-insensitive variants with the `L` suffix:
+
+| Operator | Description | Example |
+|----------|-------------|----------|
+| `$eqL` | Equals (case-insensitive) | `filter=name||$eqL||john` |
+| `$neL` | Not equals (case-insensitive) | `filter=name||$neL||john` |
+| `$startsL` | Starts with (case-insensitive) | `filter=name||$startsL||jo` |
+| `$endsL` | Ends with (case-insensitive) | `filter=email||$endsL||@gmail.com` |
+| `$contL` | Contains (case-insensitive) | `filter=description||$contL||laptop` |
+| `$exclL` | Excludes (case-insensitive) | `filter=name||$exclL||test` |
+
+```bash
+# Find users named "john" (case-insensitive)
+GET /users?filter=name||$eqL||john
+# Matches: "John", "JOHN", "john", "JoHn"
+
+# Find products containing "LAPTOP" (case-insensitive)
+GET /products?filter=description||$contL||LAPTOP
+# Matches: "laptop", "Laptop", "LAPTOP"
+```
+
+<Tip>
+  Use case-insensitive operators (`$eqL`, `$contL`, etc.) when you want to match strings regardless of case.
+</Tip>
+
+### Array Operators
+
+| Operator | Modern | Description | Example |
+|----------|--------|-------------|----------|
+| `in` | `$in` | In array | `filter=status||$in||active,pending` |
+| `notin` | `$notin` | Not in array | `filter=role||$notin||guest,banned` |
+| `between` | `$between` | Between values | `filter=age||$between||18,65` |
+
+```bash
+# Find users with status active or pending
+GET /users?filter=status||$in||active,pending
+
+# Find users aged between 18 and 65
+GET /users?filter=age||$between||18,65
+
+# Find users not in guest or banned roles
+GET /users?filter=role||$notin||guest,banned
+```
+
+### Case-Insensitive Array Operators
+
+| Operator | Description | Example |
+|----------|-------------|----------|
+| `$inL` | In array (case-insensitive) | `filter=status||$inL||active,pending` |
+| `$notinL` | Not in array (case-insensitive) | `filter=role||$notinL||guest,banned` |
+
+```bash
+# Find users with status "active" or "pending" (case-insensitive)
+GET /users?filter=status||$inL||active,PENDING
+# Matches: "Active", "PENDING", "active", "pending"
+```
+
+### Null Operators
+
+| Operator | Modern | Description | Example |
+|----------|--------|-------------|----------|
+| `isnull` | `$isnull` | Is null | `filter=deletedAt||$isnull` |
+| `notnull` | `$notnull` | Is not null | `filter=email||$notnull` |
+
+```bash
+# Find users that have not been deleted
+GET /users?filter=deletedAt||$isnull
+
+# Find users with email addresses
+GET /users?filter=email||$notnull
+```
+
+<Note>
+  Null operators do not require a value parameter. The syntax is: `filter={field}||{operator}`
+</Note>
+
+## Multiple Filters (AND)
+
+You can apply multiple filters to create AND conditions:
+
+```bash
+# Find active users older than 18
+GET /users?filter=isActive||eq||true&filter=age||gt||18
+```
+
+All filter conditions must be satisfied (AND logic).
+
+## OR Conditions
+
+Use the `or` parameter for OR logic:
+
+```bash
+# Find users named John OR Jane
+GET /users?or=name||eq||John&or=name||eq||Jane
+```
+
+## Combining AND and OR
+
+You can combine both `filter` (AND) and `or` parameters:
+
+```bash
+# Find active users named John OR Jane
+GET /users?filter=isActive||eq||true&or=name||eq||John&or=name||eq||Jane
+```
+
+This translates to: `isActive = true AND (name = 'John' OR name = 'Jane')`
+
+## Advanced Search
+
+For complex queries, use the `s` (search) parameter with JSON:
+
+### Simple Search
+
+```bash
+GET /users?s={"name":"John"}
+```
+
+### With Operators
+
+```bash
+GET /users?s={"age":{"$gte":18}}
+```
+
+### Complex OR Conditions
+
+```bash
+GET /users?s={"$or":[{"name":"John"},{"email":{"$ends":"@gmail.com"}}]}
+```
+
+### Nested AND Conditions
+
+```bash
+GET /users?s={"name":"John","age":{"$gte":18},"isActive":true}
+```
+
+<Warning>
+  When using the `s` (search) parameter, any `filter` and `or` parameters are ignored.
+</Warning>
+
+## Filtering Nested Fields
+
+You can filter by nested object fields using dot notation:
+
+```bash
+# Filter by nested profile field
+GET /users?filter=profile.city||eq||New York
+
+# Filter by nested relation field
+GET /posts?filter=author.name||eq||John
+```
+
+## Type Conversion
+
+Values are automatically parsed to the correct type:
+
+```bash
+# Number
+/users?filter=age||eq||25  # value is number 25
+
+# Boolean
+/users?filter=isActive||eq||true  # value is boolean true
+
+# Date
+/users?filter=createdAt||gt||2024-01-01T00:00:00.000Z  # value is Date object
+
+# String
+/users?filter=name||eq||John  # value is string "John"
+
+# Array
+/users?filter=id||in||1,2,3  # value is array [1, 2, 3]
+```
+
+## Practical Examples
+
+### E-commerce Filters
+
+```bash
+# Find products in a price range
+GET /products?filter=price||gte||10&filter=price||lte||100
+
+# Find products by category and in stock
+GET /products?filter=category||eq||electronics&filter=stock||gt||0
+
+# Find products with specific tags
+GET /products?filter=tags||in||sale,featured,new
+```
+
+### User Management
+
+```bash
+# Find active users created this year
+GET /users?filter=isActive||eq||true&filter=createdAt||gte||2024-01-01
+
+# Find users by role
+GET /users?filter=role||in||admin,moderator
+
+# Find unverified users
+GET /users?filter=emailVerified||eq||false
+```
+
+### Content Management
+
+```bash
+# Find published posts containing keyword
+GET /posts?filter=status||eq||published&filter=title||cont||tutorial
+
+# Find draft posts by author
+GET /posts?filter=status||eq||draft&filter=authorId||eq||123
+
+# Find posts without comments
+GET /posts?filter=commentsCount||eq||0
+```
+
+## Error Handling
+
+Invalid filters will throw a `RequestQueryException`:
+
+```bash
+# Invalid operator
+GET /users?filter=name||invalid||John
+# Error: Invalid comparison operator
+
+# Missing value for non-null operator
+GET /users?filter=name||eq
+# Error: Invalid filter value
+
+# Invalid field format
+GET /users?filter=||eq||John
+# Error: Invalid field type in filter condition
+```
+
+## Best Practices
+
+1. **Use modern operators**: Prefer `$eq`, `$gt`, etc. over deprecated operators
+2. **Use case-insensitive operators**: Use `$eqL`, `$contL` for user input to avoid case sensitivity issues
+3. **Validate user input**: Always validate and sanitize filter values from user input
+4. **Index filtered fields**: Add database indexes to fields commonly used in filters
+5. **Combine with pagination**: Always use `limit` when filtering to prevent large result sets
+6. **Use appropriate operators**: Choose the right operator for the data type (e.g., `$between` for ranges)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sorting" icon="arrow-down-a-z" href="./sorting">
+    Learn how to sort filtered results
+  </Card>
+  <Card title="Pagination" icon="list-ol" href="./pagination">
+    Paginate through filtered data
+  </Card>
+  <Card title="Relations" icon="link" href="./relations">
+    Filter related entities with joins
+  </Card>
+  <Card title="Query Parameters" icon="bars" href="./query-params">
+    Overview of all query parameters
+  </Card>
+</CardGroup>

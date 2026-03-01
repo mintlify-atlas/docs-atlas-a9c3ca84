@@ -1,0 +1,187 @@
+---
+title: Installation
+description: Install NestJS CRUD and its dependencies to start building automatic CRUD APIs.
+---
+
+## Prerequisites
+
+Before installing NestJS CRUD, ensure you have:
+
+- Node.js 14.x or higher
+- An existing NestJS project (v9.x or higher recommended)
+- TypeScript 4.6 or higher
+
+<Note>
+  If you don't have a NestJS project yet, create one using:
+  ```bash
+  npm i -g @nestjs/cli
+  nest new my-project
+  ```
+</Note>
+
+## Install core packages
+
+NestJS CRUD requires the core package along with class-transformer and class-validator for request validation.
+
+<CodeGroup>
+```bash npm
+npm install @nestjsx/crud class-transformer class-validator
+```
+
+```bash yarn
+yarn add @nestjsx/crud class-transformer class-validator
+```
+
+```bash pnpm
+pnpm add @nestjsx/crud class-transformer class-validator
+```
+</CodeGroup>
+
+## Install TypeORM integration
+
+To use NestJS CRUD with TypeORM (recommended), install the TypeORM packages:
+
+<CodeGroup>
+```bash npm
+npm install @nestjsx/crud-typeorm @nestjs/typeorm typeorm
+```
+
+```bash yarn
+yarn add @nestjsx/crud-typeorm @nestjs/typeorm typeorm
+```
+
+```bash pnpm
+pnpm add @nestjsx/crud-typeorm @nestjs/typeorm typeorm
+```
+</CodeGroup>
+
+## Install database driver
+
+Install the appropriate database driver for your database:
+
+<CodeGroup>
+```bash PostgreSQL (npm)
+npm install pg
+```
+
+```bash PostgreSQL (yarn)
+yarn add pg
+```
+
+```bash PostgreSQL (pnpm)
+pnpm add pg
+```
+
+```bash MySQL (npm)
+npm install mysql2
+```
+
+```bash MySQL (yarn)
+yarn add mysql2
+```
+
+```bash MySQL (pnpm)
+pnpm add mysql2
+```
+</CodeGroup>
+
+## Configure TypeORM
+
+Create or update your TypeORM configuration in your app module:
+
+```typescript app.module.ts
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+@Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'your_username',
+      password: 'your_password',
+      database: 'your_database',
+      entities: [__dirname + '/**/*.entity{.ts,.js}'],
+      synchronize: true, // Set to false in production
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+<Warning>
+  Set `synchronize: false` in production environments. Use migrations instead to manage database schema changes.
+</Warning>
+
+## Optional: Install request builder
+
+If you're building a frontend application and want type-safe query building, install the request builder package:
+
+<CodeGroup>
+```bash npm
+npm install @nestjsx/crud-request
+```
+
+```bash yarn
+yarn add @nestjsx/crud-request
+```
+
+```bash pnpm
+pnpm add @nestjsx/crud-request
+```
+</CodeGroup>
+
+The request builder allows you to construct API queries in your client code:
+
+```typescript frontend-example.ts
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const query = RequestQueryBuilder.create()
+  .setFilter({ field: 'name', operator: '$cont', value: 'Tech' })
+  .setLimit(10)
+  .sortBy({ field: 'name', order: 'ASC' })
+  .query();
+
+// Result: filter=name||$cont||Tech&limit=10&sort=name,ASC
+fetch(`/api/companies?${query}`);
+```
+
+## Verify installation
+
+Verify that all packages are installed correctly:
+
+```bash
+npm list @nestjsx/crud @nestjsx/crud-typeorm
+```
+
+You should see output similar to:
+
+```
+my-project@1.0.0 /path/to/my-project
+├── @nestjsx/crud@5.0.0-alpha.3
+└── @nestjsx/crud-typeorm@5.0.0-alpha.3
+```
+
+## TypeScript configuration
+
+Ensure your `tsconfig.json` has the following compiler options enabled:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  }
+}
+```
+
+These options are required for decorators and metadata reflection to work properly.
+
+## Next steps
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Now that you have NestJS CRUD installed, follow the quickstart guide to build your first CRUD API in minutes.
+</Card>

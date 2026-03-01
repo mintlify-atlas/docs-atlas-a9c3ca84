@@ -1,0 +1,153 @@
+---
+title: CrudOptions
+description: Main configuration interface for CRUD controller
+---
+
+The `CrudOptions` interface is the primary configuration object used when setting up a CRUD controller with the `@Crud()` decorator.
+
+## Interface Definition
+
+```typescript
+export interface CrudOptions {
+  model: ModelOptions;
+  dto?: DtoOptions;
+  serialize?: SerializeOptions;
+  query?: QueryOptions;
+  routes?: RoutesOptions;
+  routesFactory?: typeof CrudRoutesFactory;
+  params?: ParamsOptions;
+  validation?: ValidationPipeOptions | false;
+}
+```
+
+## Properties
+
+<ParamField path="model" type="ModelOptions" required>
+  The entity/model class that the CRUD controller will operate on. This is the only required property.
+  
+  See [ModelOptions](/api/interfaces/model-options) for details.
+</ParamField>
+
+<ParamField path="dto" type="DtoOptions">
+  Data Transfer Object configurations for create, update, and replace operations.
+  
+  Allows you to specify different DTOs for different operations:
+  - `create`: DTO class for create operations
+  - `update`: DTO class for update operations
+  - `replace`: DTO class for replace operations
+</ParamField>
+
+<ParamField path="serialize" type="SerializeOptions">
+  Serialization options for transforming entities before returning them in responses.
+  
+  Allows you to specify different serialization classes for each CRUD operation to control which fields are exposed in the API response.
+</ParamField>
+
+<ParamField path="query" type="QueryOptions">
+  Global query configuration options that apply to all query operations.
+  
+  See [QueryOptions](/api/interfaces/query-options) for details.
+</ParamField>
+
+<ParamField path="routes" type="RoutesOptions">
+  Configuration for individual CRUD routes, allowing you to customize or exclude specific endpoints.
+  
+  See [RouteOptions](/api/interfaces/route-options) for details.
+</ParamField>
+
+<ParamField path="routesFactory" type="typeof CrudRoutesFactory">
+  Custom factory for generating CRUD routes. Advanced use only.
+  
+  This allows you to completely override how routes are generated and registered.
+</ParamField>
+
+<ParamField path="params" type="ParamsOptions">
+  Configuration for URL parameters used in CRUD operations.
+  
+  See [ParamsOptions](/api/interfaces/params-options) for details.
+</ParamField>
+
+<ParamField path="validation" type="ValidationPipeOptions | false">
+  Validation pipe options from NestJS, or `false` to disable validation.
+  
+  When set to `false`, automatic validation of request bodies and query parameters is disabled. Otherwise, you can pass NestJS `ValidationPipeOptions` to customize validation behavior.
+</ParamField>
+
+## Usage Example
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud, CrudOptions } from '@nestjsx/crud';
+import { Hero } from './hero.entity';
+import { CreateHeroDto } from './dto/create-hero.dto';
+import { UpdateHeroDto } from './dto/update-hero.dto';
+
+const crudOptions: CrudOptions = {
+  model: {
+    type: Hero,
+  },
+  dto: {
+    create: CreateHeroDto,
+    update: UpdateHeroDto,
+  },
+  query: {
+    limit: 25,
+    maxLimit: 100,
+    alwaysPaginate: true,
+    join: {
+      powers: {
+        eager: true,
+      },
+    },
+  },
+  routes: {
+    exclude: ['createManyBase'],
+  },
+  params: {
+    id: {
+      field: 'id',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+};
+
+@Crud(crudOptions)
+@Controller('heroes')
+export class HeroesController {
+  constructor(public service: HeroesService) {}
+}
+```
+
+## Related Interfaces
+
+<CardGroup cols={2}>
+  <Card title="ModelOptions" icon="cube" href="/api/interfaces/model-options">
+    Configure the entity model
+  </Card>
+  <Card title="QueryOptions" icon="filter" href="/api/interfaces/query-options">
+    Configure query behavior
+  </Card>
+  <Card title="RouteOptions" icon="route" href="/api/interfaces/route-options">
+    Configure individual routes
+  </Card>
+  <Card title="ParamsOptions" icon="hashtag" href="/api/interfaces/params-options">
+    Configure URL parameters
+  </Card>
+</CardGroup>
+
+## Notes
+
+<Note>
+  The `CrudOptions` interface is typically used with the `@Crud()` decorator to configure your CRUD controller. All properties except `model` are optional, providing sensible defaults.
+</Note>
+
+<Expandable title="MergedCrudOptions">
+  There's an extended interface `MergedCrudOptions` that includes an additional `auth` property of type `AuthOptions`. This is used internally by the framework when merging global and controller-level configurations.
+  
+  ```typescript
+  export interface MergedCrudOptions extends CrudOptions {
+    auth?: AuthOptions;
+  }
+  ```
+</Expandable>

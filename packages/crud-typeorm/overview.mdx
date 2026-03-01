@@ -1,0 +1,130 @@
+---
+title: "@nestjsx/crud-typeorm"
+description: TypeORM integration package for NestJS CRUD
+---
+
+## Overview
+
+`@nestjsx/crud-typeorm` provides TypeORM integration for the NestJS CRUD framework. It implements the database layer, handling all CRUD operations using TypeORM's powerful ORM capabilities.
+
+## What It Does
+
+This package bridges the gap between the CRUD framework and your TypeORM database:
+
+- **`TypeOrmCrudService`** - A ready-to-use base service class that implements all CRUD operations
+- **Automatic query building** - Converts request parameters into TypeORM queries
+- **Relation handling** - Automatically loads and filters related entities
+- **Transaction support** - Built-in support for database transactions
+- **Soft delete support** - Handles soft deletes when configured on entities
+- **Custom query building** - Extend queries with custom TypeORM logic
+
+## Key Features
+
+### Pre-built Service Implementation
+
+Extend `TypeOrmCrudService` and get instant CRUD functionality:
+
+- Find many resources with filtering, pagination, and sorting
+- Find one resource by ID
+- Create new resources (single or bulk)
+- Update existing resources (partial or full)
+- Delete resources (hard or soft delete)
+- Recover soft-deleted resources
+
+### Advanced Query Capabilities
+
+The service automatically handles:
+
+- **Filtering** - Complex filter conditions including operators like `$eq`, `$ne`, `$gt`, `$lt`, `$in`, etc.
+- **Sorting** - Single or multi-field sorting
+- **Pagination** - Limit and offset-based pagination
+- **Relations** - Load related entities with nested relation support
+- **Field selection** - Select only specific fields
+- **Search** - Full-text search across multiple fields
+- **Caching** - Query result caching
+
+### TypeORM Integration
+
+Seamlessly integrates with TypeORM features:
+
+- Works with any database supported by TypeORM
+- Supports all TypeORM entity decorators
+- Compatible with TypeORM migrations and schema sync
+- Leverages TypeORM's connection pooling and transaction management
+- Supports custom repositories
+
+## Main Exports
+
+The package exports:
+
+### Service
+
+- `TypeOrmCrudService` - Base service class for TypeORM CRUD operations
+
+## How It Works
+
+The `TypeOrmCrudService` receives parsed request objects from `@nestjsx/crud` and converts them into TypeORM queries:
+
+1. Request comes in with query parameters
+2. `@nestjsx/crud-request` parses the query string
+3. `TypeOrmCrudService` converts the parsed query into TypeORM QueryBuilder
+4. TypeORM executes the query against the database
+5. Results are returned to the controller
+
+## Use Cases
+
+This package is perfect when you:
+
+- Are using TypeORM as your database ORM
+- Want automatic CRUD operations without writing repetitive code
+- Need advanced query capabilities out of the box
+- Want to maintain full access to TypeORM's features
+- Need to handle complex entity relationships
+
+## Database Support
+
+Since this package uses TypeORM, it supports all databases that TypeORM supports:
+
+- PostgreSQL
+- MySQL / MariaDB
+- SQLite
+- Microsoft SQL Server
+- Oracle
+- MongoDB (with limitations)
+- CockroachDB
+- And more...
+
+<Note>
+  This package requires both `@nestjsx/crud` and TypeORM to be installed. It's designed to work alongside the core CRUD package, not as a standalone solution.
+</Note>
+
+## Example Service
+
+Here's a minimal example of using `TypeOrmCrudService`:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { User } from './user.entity';
+
+@Injectable()
+export class UserService extends TypeOrmCrudService<User> {
+  constructor(@InjectRepository(User) repo) {
+    super(repo);
+  }
+}
+```
+
+That's all you need! The service now has full CRUD capabilities.
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/packages/crud-typeorm/installation">
+    Install and configure the TypeORM package
+  </Card>
+  <Card title="Core Package" icon="box" href="/packages/crud/overview">
+    Learn about the core CRUD package
+  </Card>
+</CardGroup>

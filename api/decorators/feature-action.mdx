@@ -1,0 +1,351 @@
+---
+title: '@Feature & @Action'
+description: 'Decorators for marking features and actions for authorization and metadata'
+---
+
+## Overview
+
+The `@Feature` and `@Action` decorators are used to add metadata to classes and methods for authorization and feature detection. They work with NestJS's metadata system to mark controllers and methods with identifiable names that can be used by guards, interceptors, and authorization logic.
+
+## Signatures
+
+```typescript
+export const Feature = (name: string) => SetMetadata(FEAUTURE_NAME_METADATA, name);
+export const Action = (name: string) => SetMetadata(ACTION_NAME_METADATA, name);
+```
+
+## Feature Decorator
+
+The `@Feature` decorator is a class decorator that marks a controller with a feature name.
+
+### Parameters
+
+<ParamField path="name" type="string" required>
+  The name of the feature (e.g., 'Users', 'Posts', 'Orders')
+</ParamField>
+
+### Usage
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Feature } from '@nestjsx/crud';
+
+@Feature('Users')
+@Controller('users')
+export class UserController {
+  // Controller methods
+}
+```
+
+## Action Decorator
+
+The `@Action` decorator is a method decorator that marks a controller method with an action name.
+
+### Parameters
+
+<ParamField path="name" type="string" required>
+  The name of the action (e.g., 'Create', 'Read', 'Update', 'Delete')
+</ParamField>
+
+### Usage
+
+```typescript
+import { Controller, Get, Post } from '@nestjs/common';
+import { Action } from '@nestjsx/crud';
+
+@Controller('users')
+export class UserController {
+  @Get()
+  @Action('Read')
+  findAll() {
+    // Method implementation
+  }
+
+  @Post()
+  @Action('Create')
+  create() {
+    // Method implementation
+  }
+}
+```
+
+## Helper Functions
+
+The decorators come with helper functions to retrieve the metadata:
+
+```typescript
+export const getFeature = <T = any>(target: Type<T>) => 
+  Reflect.getMetadata(FEAUTURE_NAME_METADATA, target);
+
+export const getAction = (target: unknown) => 
+  Reflect.getMetadata(ACTION_NAME_METADATA, target);
+```
+
+### Using Helper Functions
+
+```typescript
+import { getFeature, getAction } from '@nestjsx/crud';
+
+// Get feature name from controller class
+const featureName = getFeature(UserController);
+console.log(featureName); // 'Users'
+
+// Get action name from method
+const actionName = getAction(UserController.prototype.findAll);
+console.log(actionName); // 'Read'
+```
+
+## Complete Examples
+
+### Basic Feature and Action
+
+```typescript
+import { Controller, Get, Post, Put, Delete } from '@nestjs/common';
+import { Feature, Action } from '@nestjsx/crud';
+
+@Feature('Posts')
+@Controller('posts')
+export class PostController {
+  @Get()
+  @Action('List')
+  list() {
+    return [];
+  }
+
+  @Get(':id')
+  @Action('Read')
+  findOne() {
+    return {};
+  }
+
+  @Post()
+  @Action('Create')
+  create() {
+    return {};
+  }
+
+  @Put(':id')
+  @Action('Update')
+  update() {
+    return {};
+  }
+
+  @Delete(':id')
+  @Action('Delete')
+  remove() {
+    return {};
+  }
+}
+```
+
+### With Authorization Guard
+
+```typescript
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { getFeature, getAction } from '@nestjsx/crud';
+
+@Injectable()
+export class PermissionsGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+
+    // Get feature and action metadata
+    const feature = getFeature(context.getClass());
+    const action = getAction(context.getHandler());
+
+    console.log(`Checking permission: ${feature}.${action}`);
+
+    // Check if user has permission
+    return this.checkPermission(user, feature, action);
+  }
+
+  private checkPermission(user: any, feature: string, action: string): boolean {
+    // Your permission checking logic
+    const permission = `${feature}.${action}`;
+    return user.permissions?.includes(permission) ?? false;
+  }
+}
+```
+
+### Using with CRUD
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud, Feature, Action, Override, ParsedRequest, CrudRequest } from '@nestjsx/crud';
+import { UseGuards } from '@nestjs/common';
+import { Product } from './product.entity';
+import { ProductService } from './product.service';
+import { PermissionsGuard } from './permissions.guard';
+
+@Feature('Products')
+@Crud({
+  model: { type: Product },
+})
+@UseGuards(PermissionsGuard)
+@Controller('products')
+export class ProductController {
+  constructor(public service: ProductService) {}
+
+  @Override('getManyBase')
+  @Action('List')
+  getMany(@ParsedRequest() req: CrudRequest) {
+    return this.service.getMany(req);
+  }
+
+  @Override('createOneBase')
+  @Action('Create')
+  createOne(@ParsedRequest() req: CrudRequest) {
+    return this.service.createOne(req);
+  }
+}
+```
+
+### Integration Test Example
+
+From the source tests:
+
+```typescript packages/crud/test/feature-action.decorator.spec.ts:1-25
+import { Feature, Action, getFeature, getAction } from '../src/decorators';
+
+describe('#crud', () => {
+  const feature = 'feature';
+  const action = 'action';
+
+  @Feature(feature)
+  class TestClass {
+    @Action(action)
+    root() {}
+  }
+
+  describe('#feature decorator', () => {
+    it('should save metadata', () => {
+      const metadata = getFeature(TestClass);
+      expect(metadata).toBe(feature);
+    });
+  });
+  describe('#action decorator', () => {
+    it('should save metadata', () => {
+      const metadata = getAction(TestClass.prototype.root);
+      expect(metadata).toBe(action);
+    });
+  });
+});
+```
+
+### Role-Based Access Control
+
+```typescript
+import { SetMetadata } from '@nestjs/common';
+import { Feature, Action } from '@nestjsx/crud';
+
+// Custom roles decorator
+export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
+
+@Feature('Orders')
+@Controller('orders')
+export class OrderController {
+  @Get()
+  @Action('List')
+  @Roles('user', 'admin')
+  list() {
+    return [];
+  }
+
+  @Post()
+  @Action('Create')
+  @Roles('user', 'admin')
+  create() {
+    return {};
+  }
+
+  @Delete(':id')
+  @Action('Delete')
+  @Roles('admin')
+  remove() {
+    return {};
+  }
+}
+```
+
+### Custom Authorization Service
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { getFeature, getAction } from '@nestjsx/crud';
+
+interface Permission {
+  feature: string;
+  action: string;
+  roles: string[];
+}
+
+@Injectable()
+export class AuthorizationService {
+  private permissions: Permission[] = [
+    { feature: 'Users', action: 'List', roles: ['admin', 'user'] },
+    { feature: 'Users', action: 'Create', roles: ['admin'] },
+    { feature: 'Users', action: 'Update', roles: ['admin'] },
+    { feature: 'Users', action: 'Delete', roles: ['admin'] },
+    { feature: 'Posts', action: 'List', roles: ['admin', 'user', 'guest'] },
+    { feature: 'Posts', action: 'Create', roles: ['admin', 'user'] },
+  ];
+
+  canAccess(userRole: string, controllerClass: any, handlerMethod: any): boolean {
+    const feature = getFeature(controllerClass);
+    const action = getAction(handlerMethod);
+
+    if (!feature || !action) {
+      return false;
+    }
+
+    const permission = this.permissions.find(
+      p => p.feature === feature && p.action === action
+    );
+
+    return permission?.roles.includes(userRole) ?? false;
+  }
+}
+```
+
+## Implementation Details
+
+```typescript packages/crud/src/decorators/feature-action.decorator.ts:1-9
+import { SetMetadata, Type } from '@nestjs/common';
+
+import { ACTION_NAME_METADATA, FEAUTURE_NAME_METADATA } from '../constants';
+
+export const Feature = (name: string) => SetMetadata(FEAUTURE_NAME_METADATA, name);
+export const Action = (name: string) => SetMetadata(ACTION_NAME_METADATA, name);
+
+export const getFeature = <T = any>(target: Type<T>) => Reflect.getMetadata(FEAUTURE_NAME_METADATA, target);
+export const getAction = (target: unknown) => Reflect.getMetadata(ACTION_NAME_METADATA, target);
+```
+
+Both decorators use NestJS's `SetMetadata` function to store the feature/action name in the class/method metadata.
+
+<Note>
+  These decorators are primarily used for authorization and access control. They don't affect the routing or behavior of your endpoints directly.
+</Note>
+
+<Warning>
+  Remember to retrieve metadata from `ClassName.prototype.methodName` when getting action metadata, not from the method directly.
+</Warning>
+
+## Use Cases
+
+1. **Permission Checking** - Verify users have the right permissions for specific features and actions
+2. **Audit Logging** - Log which features and actions are being accessed
+3. **Rate Limiting** - Apply different rate limits based on feature/action
+4. **Analytics** - Track usage of specific features and actions
+5. **Dynamic Menu Generation** - Build navigation menus based on user permissions
+
+## See Also
+
+- [@Crud](/api/decorators/crud) - Main CRUD decorator
+- [@Override](/api/decorators/override) - Override CRUD routes
+- [NestJS Guards](https://docs.nestjs.com/guards) - Authorization guards
+- [NestJS Custom Decorators](https://docs.nestjs.com/custom-decorators) - Creating custom decorators

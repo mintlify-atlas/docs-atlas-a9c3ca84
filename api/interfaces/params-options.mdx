@@ -1,0 +1,331 @@
+---
+title: ParamsOptions
+description: Configure URL parameters for CRUD operations
+---
+
+The `ParamsOptions` interface allows you to configure URL path parameters used in CRUD operations, including their types, validation, and mapping to entity fields.
+
+## Interface Definition
+
+```typescript
+export interface ParamsOptions {
+  [key: string]: ParamOption;
+}
+
+export interface ParamOption {
+  field?: string;
+  type?: ParamOptionType;
+  enum?: SwaggerEnumType;
+  primary?: boolean;
+  disabled?: boolean;
+}
+```
+
+## Structure
+
+`ParamsOptions` is a key-value object where:
+- **Key**: The parameter name as it appears in the URL (e.g., `id`, `userId`, `companyId`)
+- **Value**: A `ParamOption` object that configures how that parameter behaves
+
+## ParamOption Properties
+
+<ParamField path="field" type="string">
+  The entity field name that this parameter maps to.
+  
+  ```typescript
+  params: {
+    id: {
+      field: 'id', // Maps to the 'id' field in the entity
+      type: 'uuid',
+      primary: true,
+    }
+  }
+  ```
+  
+  If not specified, defaults to the parameter name.
+</ParamField>
+
+<ParamField path="type" type="ParamOptionType">
+  The data type of the parameter for validation and parsing.
+  
+  Common values:
+  - `'number'`: Numeric ID
+  - `'uuid'`: UUID string
+  - `'string'`: Generic string
+  
+  ```typescript
+  params: {
+    id: { type: 'uuid', primary: true },
+    companyId: { type: 'number' },
+  }
+  ```
+</ParamField>
+
+<ParamField path="enum" type="SwaggerEnumType">
+  Enum type for Swagger documentation and validation.
+  
+  ```typescript
+  enum Status {
+    Active = 'active',
+    Inactive = 'inactive',
+  }
+  
+  params: {
+    status: {
+      field: 'status',
+      enum: Status,
+    }
+  }
+  ```
+  
+  This will generate proper enum documentation in Swagger and validate that the parameter matches one of the enum values.
+</ParamField>
+
+<ParamField path="primary" type="boolean">
+  Indicates whether this parameter represents the primary key.
+  
+  ```typescript
+  params: {
+    id: {
+      field: 'id',
+      type: 'uuid',
+      primary: true, // This is the primary key
+    }
+  }
+  ```
+  
+  The primary parameter is used for single-record operations (getOne, updateOne, deleteOne, etc.).
+</ParamField>
+
+<ParamField path="disabled" type="boolean">
+  If `true`, this parameter is disabled and won't be used in queries.
+  
+  ```typescript
+  params: {
+    userId: {
+      disabled: true, // Don't use this parameter
+    }
+  }
+  ```
+</ParamField>
+
+## Usage Examples
+
+### Basic UUID Primary Key
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+
+@Crud({
+  model: { type: User },
+  params: {
+    id: {
+      field: 'id',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+})
+@Controller('users')
+export class UsersController {}
+```
+
+Generates routes like:
+- `GET /users/:id`
+- `PATCH /users/:id`
+- `DELETE /users/:id`
+
+### Numeric Primary Key
+
+```typescript
+@Crud({
+  model: { type: Product },
+  params: {
+    id: {
+      field: 'id',
+      type: 'number',
+      primary: true,
+    },
+  },
+})
+@Controller('products')
+export class ProductsController {}
+```
+
+### Composite Parameters (Nested Resources)
+
+```typescript
+@Crud({
+  model: { type: Post },
+  params: {
+    userId: {
+      field: 'userId',
+      type: 'number',
+    },
+    id: {
+      field: 'id',
+      type: 'number',
+      primary: true,
+    },
+  },
+})
+@Controller('users/:userId/posts')
+export class PostsController {}
+```
+
+Generates routes like:
+- `GET /users/:userId/posts`
+- `GET /users/:userId/posts/:id`
+- `POST /users/:userId/posts`
+- `PATCH /users/:userId/posts/:id`
+
+### Custom Field Mapping
+
+```typescript
+@Crud({
+  model: { type: Article },
+  params: {
+    slug: {
+      field: 'urlSlug', // URL parameter 'slug' maps to entity field 'urlSlug'
+      type: 'string',
+      primary: true,
+    },
+  },
+})
+@Controller('articles')
+export class ArticlesController {}
+```
+
+Generates routes like:
+- `GET /articles/:slug` (uses `urlSlug` field for lookup)
+
+### Enum Parameters
+
+```typescript
+enum UserRole {
+  Admin = 'admin',
+  User = 'user',
+  Guest = 'guest',
+}
+
+@Crud({
+  model: { type: User },
+  params: {
+    role: {
+      field: 'role',
+      type: 'string',
+      enum: UserRole,
+    },
+    id: {
+      field: 'id',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+})
+@Controller('users/:role')
+export class UsersController {}
+```
+
+### Disabled Parameters
+
+```typescript
+@Crud({
+  model: { type: Order },
+  params: {
+    userId: {
+      field: 'userId',
+      type: 'number',
+      disabled: true, // Present in URL but not used in queries
+    },
+    id: {
+      field: 'id',
+      type: 'uuid',
+      primary: true,
+    },
+  },
+})
+@Controller('users/:userId/orders')
+export class OrdersController {}
+```
+
+## ParamOptionType
+
+The `ParamOptionType` from `@nestjsx/crud-request` typically includes:
+
+```typescript
+type ParamOptionType = 'number' | 'string' | 'uuid';
+```
+
+- `'number'`: Validates and parses as a number
+- `'string'`: Treats as a string (no parsing)
+- `'uuid'`: Validates UUID format
+
+## Notes
+
+<Note>
+  If you don't specify a `field` property, the parameter name will be used as the field name. For example, `params: { id: { type: 'uuid', primary: true } }` assumes the entity has an `id` field.
+</Note>
+
+<Warning>
+  Make sure your route path matches your parameter configuration. If you define a parameter `userId` in `params`, your controller route should include `:userId` in the path.
+  
+  ```typescript
+  // Correct
+  @Controller('users/:userId/posts')
+  
+  // Incorrect - missing :userId in path
+  @Controller('users/posts')
+  ```
+</Warning>
+
+<Expandable title="Multiple Primary Keys">
+  While uncommon, you can have multiple primary keys (composite key):
+  
+  ```typescript
+  params: {
+    userId: {
+      field: 'userId',
+      type: 'number',
+      primary: true,
+    },
+    postId: {
+      field: 'postId',
+      type: 'number',
+      primary: true,
+    },
+  }
+  ```
+  
+  This is useful for junction/pivot tables with composite primary keys.
+</Expandable>
+
+<Expandable title="Default Parameter Behavior">
+  If you don't specify any `params` configuration, the framework will:
+  
+  1. Look for an `id` parameter in your routes
+  2. Assume it's a number type
+  3. Mark it as the primary key
+  
+  This works for simple use cases:
+  
+  ```typescript
+  @Crud({ model: { type: User } })
+  @Controller('users')
+  export class UsersController {}
+  // Automatically handles /users/:id with numeric ID
+  ```
+</Expandable>
+
+## Related Configuration
+
+<CardGroup cols={2}>
+  <Card title="CrudOptions" icon="gear" href="/api/interfaces/crud-options">
+    Main CRUD configuration
+  </Card>
+  <Card title="ModelOptions" icon="cube" href="/api/interfaces/model-options">
+    Configure entity model
+  </Card>
+</CardGroup>

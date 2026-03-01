@@ -1,0 +1,731 @@
+---
+title: RequestQueryBuilder
+description: Build complex queries from the frontend with a fluent API
+icon: hammer
+---
+
+The `RequestQueryBuilder` class provides a fluent, chainable API for building complex queries from your frontend application. It generates properly formatted query strings that the NestJS CRUD backend can parse and execute.
+
+## Installation
+
+The RequestQueryBuilder is part of the `@nestjsx/crud-request` package:
+
+```bash
+npm install @nestjsx/crud-request
+```
+
+## Basic Usage
+
+<Steps>
+  <Step title="Import the builder">
+    ```typescript
+    import { RequestQueryBuilder } from '@nestjsx/crud-request';
+    ```
+  </Step>
+  
+  <Step title="Create a new instance">
+    ```typescript
+    const qb = RequestQueryBuilder.create();
+    ```
+  </Step>
+  
+  <Step title="Chain methods and generate query string">
+    ```typescript
+    const queryString = qb
+      .select(['id', 'name', 'email'])
+      .setFilter({ field: 'isActive', operator: '$eq', value: true })
+      .setLimit(10)
+      .query();
+    ```
+  </Step>
+</Steps>
+
+## Creating a Query Builder
+
+### Default Constructor
+
+Create a new instance with default configuration:
+
+```typescript
+const qb = RequestQueryBuilder.create();
+```
+
+### From Parameters Object
+
+Create and configure in one step using a parameters object:
+
+```typescript
+const qb = RequestQueryBuilder.create({
+  fields: ['id', 'name', 'email'],
+  filter: [{ field: 'age', operator: '$gte', value: 18 }],
+  sort: [{ field: 'name', order: 'ASC' }],
+  limit: 20,
+  page: 1,
+});
+
+const queryString = qb.query();
+```
+
+<Note>
+  The `create()` method with parameters internally calls `select()`, `setFilter()`, `sortBy()`, and other methods based on the provided configuration.
+</Note>
+
+## Selecting Fields
+
+Control which fields are returned in the response:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name', 'email', 'createdAt']);
+```
+
+<CodeGroup>
+```typescript Example: Select Specific Fields
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name', 'email']);
+
+// Generates: fields=id,name,email
+```
+
+```typescript Example: Select from Nested Relations
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name', 'profile.avatar', 'profile.bio']);
+
+// Generates: fields=id,name,profile.avatar,profile.bio
+```
+</CodeGroup>
+
+## Filtering Data
+
+### Single Filter
+
+Apply a single filter condition:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' });
+
+// Generates: filter=status||$eq||active
+```
+
+### Multiple Filters (AND)
+
+Multiple filters are combined with AND logic:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setFilter([
+    { field: 'status', operator: '$eq', value: 'active' },
+    { field: 'age', operator: '$gte', value: 18 },
+    { field: 'role', operator: '$ne', value: 'guest' },
+  ]);
+
+// All conditions must be true
+```
+
+### Array Notation
+
+Use array notation for more concise syntax:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setFilter(['status', '$eq', 'active']);
+
+// Equivalent to:
+// .setFilter({ field: 'status', operator: '$eq', value: 'active' })
+```
+
+### OR Filters
+
+Use `setOr()` for OR logic:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setOr([
+    { field: 'role', operator: '$eq', value: 'admin' },
+    { field: 'role', operator: '$eq', value: 'moderator' },
+  ]);
+
+// Generates: or=role||$eq||admin&or=role||$eq||moderator
+```
+
+### Combining AND and OR
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' })
+  .setOr([
+    { field: 'role', operator: '$eq', value: 'admin' },
+    { field: 'role', operator: '$eq', value: 'moderator' },
+  ]);
+
+// (status = 'active') AND (role = 'admin' OR role = 'moderator')
+```
+
+## Comparison Operators
+
+<CodeGroup>
+```typescript Equality
+RequestQueryBuilder.create()
+  .setFilter({ field: 'id', operator: '$eq', value: 1 });
+  // Equals
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'status', operator: '$ne', value: 'deleted' });
+  // Not equals
+```
+
+```typescript Comparison
+RequestQueryBuilder.create()
+  .setFilter({ field: 'age', operator: '$gt', value: 18 });
+  // Greater than
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'age', operator: '$lt', value: 65 });
+  // Lower than
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'price', operator: '$gte', value: 100 });
+  // Greater than or equals
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'price', operator: '$lte', value: 1000 });
+  // Lower than or equals
+```
+
+```typescript String Matching
+RequestQueryBuilder.create()
+  .setFilter({ field: 'name', operator: '$starts', value: 'John' });
+  // Starts with
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'email', operator: '$ends', value: '@gmail.com' });
+  // Ends with
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'description', operator: '$cont', value: 'nestjs' });
+  // Contains
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'tags', operator: '$excl', value: 'deprecated' });
+  // Excludes
+```
+
+```typescript Arrays and Nulls
+RequestQueryBuilder.create()
+  .setFilter({ field: 'status', operator: '$in', value: ['active', 'pending'] });
+  // In array
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'role', operator: '$notin', value: ['guest', 'banned'] });
+  // Not in array
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'deletedAt', operator: '$isnull' });
+  // Is null
+  
+RequestQueryBuilder.create()
+  .setFilter({ field: 'email', operator: '$notnull' });
+  // Not null
+```
+
+```typescript Range
+RequestQueryBuilder.create()
+  .setFilter({ field: 'age', operator: '$between', value: [18, 65] });
+  // Between two values
+```
+</CodeGroup>
+
+<Tip>
+  Case-insensitive operators are available by adding 'L' suffix: `$eqL`, `$neL`, `$startsL`, `$endsL`, `$contL`, `$exclL`, `$inL`, `$notinL`
+</Tip>
+
+## Advanced Search
+
+Use the `search()` method for complex nested conditions:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .search({
+    $or: [
+      { name: { $cont: 'john' } },
+      { email: { $cont: 'john' } },
+    ],
+  });
+
+// Search for 'john' in name OR email
+```
+
+<CodeGroup>
+```typescript Complex AND/OR
+const qb = RequestQueryBuilder.create()
+  .search({
+    status: 'active',
+    $or: [
+      { role: 'admin' },
+      { 
+        $and: [
+          { role: 'user' },
+          { verified: true },
+        ],
+      },
+    ],
+  });
+```
+
+```typescript Multiple Operators
+const qb = RequestQueryBuilder.create()
+  .search({
+    age: {
+      $gte: 18,
+      $lte: 65,
+    },
+    name: {
+      $starts: 'A',
+    },
+  });
+```
+</CodeGroup>
+
+<Note>
+  When using `search()`, any filters set with `setFilter()` or `setOr()` will be ignored. The search parameter takes precedence.
+</Note>
+
+## Joining Relations
+
+### Basic Join
+
+Load related entities:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setJoin({ field: 'profile' })
+  .setJoin({ field: 'posts' });
+
+// Generates: join=profile&join=posts
+```
+
+### Join with Selected Fields
+
+Control which fields are loaded from the relation:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setJoin({ 
+    field: 'profile', 
+    select: ['id', 'avatar', 'bio'] 
+  });
+
+// Generates: join=profile||id,avatar,bio
+```
+
+### Multiple Joins
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setJoin([
+    { field: 'profile', select: ['id', 'avatar'] },
+    { field: 'posts', select: ['id', 'title', 'createdAt'] },
+    { field: 'posts.comments' }, // Nested relation
+  ]);
+```
+
+### Array Notation for Joins
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setJoin(['profile', ['id', 'avatar', 'bio']]);
+
+// Equivalent to:
+// .setJoin({ field: 'profile', select: ['id', 'avatar', 'bio'] })
+```
+
+## Sorting Results
+
+### Single Sort
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .sortBy({ field: 'createdAt', order: 'DESC' });
+
+// Generates: sort=createdAt,DESC
+```
+
+### Multiple Sorts
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .sortBy([
+    { field: 'status', order: 'ASC' },
+    { field: 'createdAt', order: 'DESC' },
+  ]);
+
+// Sort by status first, then by createdAt
+```
+
+### Array Notation for Sorting
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .sortBy(['name', 'ASC']);
+
+// Equivalent to:
+// .sortBy({ field: 'name', order: 'ASC' })
+```
+
+## Pagination
+
+### Limit and Offset
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setLimit(20)
+  .setOffset(40);
+
+// Get 20 items starting from position 40
+```
+
+### Page-based Pagination
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setLimit(20)
+  .setPage(3);
+
+// Get page 3 with 20 items per page
+```
+
+<Tip>
+  When using `setPage()`, the offset is automatically calculated as `(page - 1) * limit`.
+</Tip>
+
+## Cache Control
+
+### Reset Cache
+
+Force a fresh query bypassing any server-side cache:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .resetCache();
+
+// Generates: cache=0
+```
+
+## Soft Deletes
+
+Include soft-deleted records in results:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .setIncludeDeleted(1);
+
+// Generates: include_deleted=1
+```
+
+## Complete Example
+
+Here's a comprehensive example combining multiple features:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const qb = RequestQueryBuilder.create()
+  // Select specific fields
+  .select(['id', 'name', 'email', 'createdAt'])
+  
+  // Join relations with specific fields
+  .setJoin([
+    { field: 'profile', select: ['id', 'avatar', 'bio'] },
+    { field: 'posts', select: ['id', 'title', 'publishedAt'] },
+  ])
+  
+  // Filter conditions (AND)
+  .setFilter([
+    { field: 'isActive', operator: '$eq', value: true },
+    { field: 'age', operator: '$gte', value: 18 },
+  ])
+  
+  // OR conditions
+  .setOr([
+    { field: 'role', operator: '$eq', value: 'admin' },
+    { field: 'role', operator: '$eq', value: 'moderator' },
+  ])
+  
+  // Sorting
+  .sortBy([
+    { field: 'createdAt', order: 'DESC' },
+    { field: 'name', order: 'ASC' },
+  ])
+  
+  // Pagination
+  .setLimit(20)
+  .setPage(1)
+  
+  // Generate query string
+  .query();
+
+// Use with your HTTP client
+const response = await fetch(`/api/users?${queryString}`);
+```
+
+## Using with HTTP Clients
+
+<CodeGroup>
+```typescript Fetch API
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name'])
+  .setFilter({ field: 'isActive', operator: '$eq', value: true })
+  .setLimit(10);
+
+const response = await fetch(`/api/users?${qb.query()}`);
+const data = await response.json();
+```
+
+```typescript Axios
+import axios from 'axios';
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name', 'email'])
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' });
+
+const { data } = await axios.get('/api/users', {
+  params: qb.queryObject,
+  paramsSerializer: () => qb.query(),
+});
+```
+
+```typescript React Query
+import { useQuery } from '@tanstack/react-query';
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+function useUsers(filters) {
+  return useQuery(['users', filters], async () => {
+    const qb = RequestQueryBuilder.create()
+      .select(['id', 'name', 'email'])
+      .setFilter(filters)
+      .setLimit(20);
+    
+    const response = await fetch(`/api/users?${qb.query()}`);
+    return response.json();
+  });
+}
+```
+
+```typescript Angular HttpClient
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+@Injectable()
+export class UserService {
+  constructor(private http: HttpClient) {}
+  
+  getUsers() {
+    const qb = RequestQueryBuilder.create()
+      .select(['id', 'name', 'email'])
+      .setFilter({ field: 'isActive', operator: '$eq', value: true });
+    
+    return this.http.get(`/api/users?${qb.query()}`);
+  }
+}
+```
+</CodeGroup>
+
+## Configuration
+
+### Global Options
+
+Configure the builder globally for your application:
+
+```typescript
+import { RequestQueryBuilder } from '@nestjsx/crud-request';
+
+RequestQueryBuilder.setOptions({
+  delim: '||',      // Delimiter for query parts
+  delimStr: ',',    // Delimiter for arrays
+  paramNamesMap: {
+    fields: ['fields', 'select'],
+    filter: 'filter',
+    or: 'or',
+    join: 'join',
+    sort: 'sort',
+    limit: ['limit', 'per_page'],
+    offset: 'offset',
+    page: 'page',
+    cache: 'cache',
+    includeDeleted: 'include_deleted',
+  },
+});
+```
+
+### Custom Parameter Names
+
+If your API uses different parameter names:
+
+```typescript
+RequestQueryBuilder.setOptions({
+  paramNamesMap: {
+    fields: 'select',
+    filter: 'where',
+    limit: 'take',
+    offset: 'skip',
+  },
+});
+
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name'])
+  .setLimit(10);
+
+// Generates: select=id,name&take=10
+```
+
+## Accessing Query Object
+
+Access the raw query object before converting to string:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name'])
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' });
+
+console.log(qb.queryObject);
+// {
+//   fields: 'id,name',
+//   filter: ['status||$eq||active']
+// }
+```
+
+## Query String Generation
+
+The `query()` method generates the final URL query string:
+
+```typescript
+const qb = RequestQueryBuilder.create()
+  .select(['id', 'name'])
+  .setFilter({ field: 'status', operator: '$eq', value: 'active' });
+
+// URL encoded (default)
+const encoded = qb.query();
+// fields=id%2Cname&filter=status%7C%7C%24eq%7C%7Cactive
+
+// Without encoding
+const notEncoded = qb.query(false);
+// fields=id,name&filter=status||$eq||active
+```
+
+<Note>
+  The generated query string is also stored in the `queryString` property: `qb.queryString`
+</Note>
+
+## TypeScript Types
+
+The builder is fully typed for TypeScript users:
+
+```typescript
+import {
+  RequestQueryBuilder,
+  QueryFilter,
+  QueryJoin,
+  QuerySort,
+  CondOperator,
+  CreateQueryParams,
+} from '@nestjsx/crud-request';
+
+// Typed filter
+const filter: QueryFilter = {
+  field: 'status',
+  operator: CondOperator.EQUALS, // or '$eq'
+  value: 'active',
+};
+
+// Typed join
+const join: QueryJoin = {
+  field: 'profile',
+  select: ['id', 'avatar'],
+};
+
+// Typed sort
+const sort: QuerySort = {
+  field: 'createdAt',
+  order: 'DESC',
+};
+
+// Use with builder
+const qb = RequestQueryBuilder.create()
+  .setFilter(filter)
+  .setJoin(join)
+  .sortBy(sort);
+```
+
+## Best Practices
+
+1. **Reusable Query Builders**: Create factory functions for common queries
+
+```typescript
+function createActiveUsersQuery(page: number) {
+  return RequestQueryBuilder.create()
+    .select(['id', 'name', 'email'])
+    .setFilter({ field: 'isActive', operator: '$eq', value: true })
+    .sortBy({ field: 'name', order: 'ASC' })
+    .setLimit(20)
+    .setPage(page);
+}
+```
+
+2. **Type-Safe Filters**: Use TypeScript enums for operators
+
+```typescript
+import { CondOperator } from '@nestjsx/crud-request';
+
+const qb = RequestQueryBuilder.create()
+  .setFilter({ 
+    field: 'status', 
+    operator: CondOperator.EQUALS, 
+    value: 'active' 
+  });
+```
+
+3. **Dynamic Queries**: Build queries based on user input
+
+```typescript
+function buildUserQuery(options: {
+  search?: string;
+  role?: string;
+  page?: number;
+}) {
+  const qb = RequestQueryBuilder.create()
+    .select(['id', 'name', 'email', 'role']);
+  
+  if (options.search) {
+    qb.search({
+      $or: [
+        { name: { $cont: options.search } },
+        { email: { $cont: options.search } },
+      ],
+    });
+  }
+  
+  if (options.role) {
+    qb.setFilter({ field: 'role', operator: '$eq', value: options.role });
+  }
+  
+  if (options.page) {
+    qb.setPage(options.page).setLimit(20);
+  }
+  
+  return qb.query();
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Query String Format" icon="code" href="/frontend/query-string">
+    Learn about the query string format and parameters
+  </Card>
+  <Card title="Controllers" icon="server" href="/controllers">
+    Set up CRUD controllers to handle these queries
+  </Card>
+</CardGroup>

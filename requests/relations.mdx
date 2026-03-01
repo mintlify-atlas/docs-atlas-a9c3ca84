@@ -1,0 +1,511 @@
+---
+title: Relations
+description: Load related entities using joins in NestJS CRUD requests
+---
+
+Relations (joins) allow you to load associated entities in a single request, reducing the need for multiple API calls. This is essential for efficient data fetching in relational databases.
+
+## Basic Syntax
+
+The join parameter uses the following format:
+
+```bash
+join={relation}
+```
+
+- **relation**: The name of the relation field defined in your entity
+
+### Example
+
+```bash
+GET /users?join=profile
+```
+
+This retrieves users with their associated profile data included.
+
+## Simple Joins
+
+Load a related entity without specifying which fields to select:
+
+```bash
+# Load user with profile
+GET /users/1?join=profile
+
+# Load post with author
+GET /posts/1?join=author
+
+# Load order with customer
+GET /orders/1?join=customer
+```
+
+This returns all fields from both the main entity and the related entity.
+
+## Selecting Related Fields
+
+You can specify which fields to return from the related entity:
+
+```bash
+join={relation}||{field1},{field2},{field3}
+```
+
+### Syntax
+
+- **relation**: The relation name
+- **fields**: Comma-separated list of fields from the related entity
+
+### Examples
+
+```bash
+# Load user with specific profile fields
+GET /users/1?join=profile||firstName,lastName,city
+
+# Load post with author name and email only
+GET /posts/1?join=author||name,email
+
+# Load order with customer name only
+GET /orders/1?join=customer||name
+```
+
+<Note>
+  The delimiter between relation and fields is `||` (double pipe), while fields are separated by `,` (comma).
+</Note>
+
+## Multiple Joins
+
+You can join multiple relations in a single request:
+
+```bash
+# Join multiple relations
+GET /users?join=profile&join=posts&join=comments
+
+# Join with field selection
+GET /users?join=profile||firstName,lastName&join=posts||title,createdAt
+```
+
+### Example: Blog Post with Author and Comments
+
+```bash
+GET /posts?join=author||name,email&join=comments||text,createdAt&join=category||name
+```
+
+This returns posts with:
+- Author's name and email
+- Comments text and creation date
+- Category name
+
+## Nested Relations
+
+You can load nested relations using dot notation:
+
+```bash
+# Load user with profile and profile's address
+GET /users?join=profile&join=profile.address
+
+# Load post with author and author's profile
+GET /posts?join=author&join=author.profile
+
+# Load order with customer and customer's address
+GET /orders?join=customer&join=customer.address||street,city,country
+```
+
+### Example: Multi-Level Nesting
+
+```bash
+# Load users with their posts, and each post's comments
+GET /users?join=posts&join=posts.comments&join=posts.comments.author
+```
+
+## Join Types
+
+By default, joins use LEFT JOIN behavior. The join is applied based on your entity relationships:
+
+- **One-to-One**: Loads the single related entity
+- **Many-to-One**: Loads the related parent entity
+- **One-to-Many**: Loads all related child entities
+- **Many-to-Many**: Loads all related entities through junction table
+
+### Examples by Relationship Type
+
+```bash
+# One-to-One: User has one Profile
+GET /users?join=profile
+
+# Many-to-One: Post belongs to one Author
+GET /posts?join=author
+
+# One-to-Many: User has many Posts
+GET /users?join=posts
+
+# Many-to-Many: Post has many Tags
+GET /posts?join=tags
+```
+
+## Filtering on Relations
+
+You can filter by fields in related entities:
+
+```bash
+# Filter users by profile city
+GET /users?join=profile&filter=profile.city||eq||New York
+
+# Filter posts by author name
+GET /posts?join=author&filter=author.name||eq||John Doe
+
+# Filter orders by customer email
+GET /orders?join=customer&filter=customer.email||cont||@gmail.com
+```
+
+### Multiple Relation Filters
+
+```bash
+# Complex filtering on relations
+GET /posts?join=author&join=category&filter=author.isActive||eq||true&filter=category.name||eq||Technology
+```
+
+<Tip>
+  When filtering by relation fields, make sure to include the corresponding `join` parameter.
+</Tip>
+
+## Sorting by Relations
+
+Sort results by fields in related entities:
+
+```bash
+# Sort users by profile city
+GET /users?join=profile&sort=profile.city,ASC
+
+# Sort posts by author name
+GET /posts?join=author&sort=author.name,ASC
+
+# Sort products by category name
+GET /products?join=category&sort=category.name,ASC
+```
+
+### Multiple Sorts with Relations
+
+```bash
+# Sort by relation field, then by own field
+GET /posts?join=author&sort=author.name,ASC&sort=createdAt,DESC
+```
+
+## Complete Examples
+
+### User Profile API
+
+```bash
+# Get user with full profile
+GET /users/123?join=profile
+
+# Get user with selected profile fields
+GET /users/123?join=profile||firstName,lastName,city,country
+
+# Get users with profiles, filtered by city
+GET /users?join=profile&filter=profile.city||eq||New York&limit=20
+```
+
+### Blog API
+
+```bash
+# Get post with author info
+GET /posts/456?join=author||name,email,avatar
+
+# Get posts with comments and authors
+GET /posts?join=author&join=comments&sort=createdAt,DESC&limit=10
+
+# Get published posts with author and category
+GET /posts?filter=status||eq||published&join=author||name&join=category||name&sort=publishedAt,DESC
+```
+
+### E-commerce API
+
+```bash
+# Get order with customer and items
+GET /orders/789?join=customer||name,email&join=items||productName,quantity,price
+
+# Get products with category and reviews
+GET /products?join=category||name&join=reviews||rating,comment&filter=isActive||eq||true
+
+# Get customer with all orders
+GET /customers/123?join=orders||id,total,status,createdAt
+```
+
+### Social Media API
+
+```bash
+# Get posts with author, likes, and comments count
+GET /posts?join=author||name,avatar&fields=id,content,createdAt,likesCount,commentsCount
+
+# Get user with followers and following
+GET /users/123?join=followers||name,avatar&join=following||name,avatar
+
+# Get comments with post and author
+GET /comments?join=post||title&join=author||name,avatar&sort=createdAt,DESC
+```
+
+## Combining All Features
+
+```bash
+GET /posts?join=author||name,email&join=category||name&filter=status||eq||published&filter=author.isActive||eq||true&sort=createdAt,DESC&fields=id,title,content&limit=20&page=1
+```
+
+This request:
+1. Joins author (with name and email)
+2. Joins category (with name)
+3. Filters published posts
+4. Filters posts by active authors
+5. Sorts by creation date (newest first)
+6. Returns specific fields
+7. Returns 20 posts per page
+8. Returns the first page
+
+## Entity Configuration
+
+For joins to work, your entities must define the relationships:
+
+### TypeORM Example
+
+```typescript
+import { Entity, Column, OneToOne, ManyToOne, OneToMany, ManyToMany, JoinColumn, JoinTable } from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  // One-to-One
+  @OneToOne(() => Profile)
+  @JoinColumn()
+  profile: Profile;
+
+  // One-to-Many
+  @OneToMany(() => Post, post => post.author)
+  posts: Post[];
+
+  // Many-to-Many
+  @ManyToMany(() => Group)
+  @JoinTable()
+  groups: Group[];
+}
+
+@Entity()
+export class Post {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  title: string;
+
+  // Many-to-One
+  @ManyToOne(() => User, user => user.posts)
+  author: User;
+
+  // One-to-Many
+  @OneToMany(() => Comment, comment => comment.post)
+  comments: Comment[];
+}
+```
+
+### Controller Configuration
+
+Enable relations in your CRUD controller:
+
+```typescript
+import { Crud } from '@nestjsx/crud';
+import { Controller } from '@nestjs/common';
+import { PostsService } from './posts.service';
+import { Post } from './post.entity';
+
+@Crud({
+  model: {
+    type: Post,
+  },
+  query: {
+    join: {
+      author: {
+        eager: false,  // Load only when requested
+        allow: ['name', 'email', 'avatar'],  // Allowed fields
+      },
+      category: {
+        eager: false,
+        allow: ['name', 'slug'],
+      },
+      comments: {
+        eager: false,
+        allow: ['text', 'createdAt'],
+      },
+      'comments.author': {  // Nested relation
+        eager: false,
+        allow: ['name', 'avatar'],
+      },
+    },
+  },
+})
+@Controller('posts')
+export class PostsController {
+  constructor(public service: PostsService) {}
+}
+```
+
+<Warning>
+  Only explicitly allowed relations and fields can be accessed via the API. Configure the `join` option in your CRUD decorator to control access.
+</Warning>
+
+## Security Considerations
+
+### Whitelist Relations
+
+Always whitelist allowed relations:
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    join: {
+      profile: { allow: ['firstName', 'lastName'] },  // ✅ Allowed
+      // password relation not listed = not accessible  ❌ Blocked
+    },
+  },
+})
+```
+
+### Limit Nested Joins
+
+Prevent excessive nesting to avoid performance issues:
+
+```typescript
+@Crud({
+  model: { type: User },
+  query: {
+    maxLimit: 100,  // Maximum number of results
+    alwaysPaginate: true,  // Force pagination
+    join: {
+      // Only allow 1-2 levels of nesting
+      posts: {},
+      'posts.comments': {},
+      // Don't allow deeper nesting
+    },
+  },
+})
+```
+
+## Performance Considerations
+
+### N+1 Query Problem
+
+Joins help avoid the N+1 query problem:
+
+```bash
+# ❌ Bad: N+1 queries (1 for users + N for each user's profile)
+GET /users  # Then fetch each profile separately
+
+# ✅ Good: Single query with join
+GET /users?join=profile
+```
+
+### Selective Field Loading
+
+Only load fields you need:
+
+```bash
+# ❌ Bad: Load all fields
+GET /users?join=profile
+
+# ✅ Good: Load only needed fields
+GET /users?join=profile||firstName,lastName&fields=id,name,email
+```
+
+### Limit Joined Results
+
+Always use pagination with joins:
+
+```bash
+# ❌ Bad: No limit (may load thousands of relations)
+GET /users?join=posts
+
+# ✅ Good: With pagination
+GET /users?join=posts&limit=20&page=1
+```
+
+### Index Foreign Keys
+
+Ensure foreign keys are indexed for efficient joins:
+
+```typescript
+@Entity()
+export class Post {
+  @ManyToOne(() => User)
+  @Index()  // Index the foreign key
+  author: User;
+}
+```
+
+## Error Handling
+
+Invalid join parameters will throw a `RequestQueryException`:
+
+```bash
+# Invalid join (relation not allowed)
+GET /users?join=secrets
+# Error: Invalid join field
+
+# Invalid join field format
+GET /users?join=||field1,field2
+# Error: Invalid join field. String expected
+```
+
+## Best Practices
+
+1. **Whitelist relations**: Always configure allowed relations in your controller
+2. **Select specific fields**: Use field selection to reduce payload size
+3. **Use pagination**: Always paginate when joining one-to-many relations
+4. **Index foreign keys**: Add database indexes to foreign key columns
+5. **Limit nesting depth**: Don't allow too many levels of nested joins
+6. **Eager vs lazy loading**: Use `eager: false` and load on demand
+7. **Document relations**: Clearly document available relations in your API docs
+8. **Monitor performance**: Track query performance and optimize slow joins
+
+## Common Patterns
+
+### Loading User Profile Data
+
+```bash
+GET /users?join=profile||firstName,lastName,avatar,bio&limit=50
+```
+
+### Blog Post with Full Context
+
+```bash
+GET /posts/123?join=author||name,avatar&join=category||name&join=tags||name&join=comments||text,createdAt
+```
+
+### E-commerce Product Details
+
+```bash
+GET /products/456?join=category||name&join=reviews||rating,comment,userName&join=images||url
+```
+
+### Social Feed
+
+```bash
+GET /posts?join=author||name,avatar&filter=author.id||in||1,2,3&sort=createdAt,DESC&limit=20
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Filtering" icon="filter" href="./filtering">
+    Filter by fields in related entities
+  </Card>
+  <Card title="Sorting" icon="arrow-down-a-z" href="./sorting">
+    Sort by fields in related entities
+  </Card>
+  <Card title="Field Selection" icon="list-check" href="./select-fields">
+    Select specific fields from relations
+  </Card>
+  <Card title="Query Parameters" icon="bars" href="./query-params">
+    Overview of all query parameters
+  </Card>
+</CardGroup>

@@ -1,0 +1,261 @@
+---
+title: Installing @nestjsx/crud-typeorm
+description: Installation and setup guide for the TypeORM integration package
+---
+
+## Installation
+
+Install the TypeORM integration package along with its required dependencies:
+
+<CodeGroup>
+
+```bash npm
+npm install @nestjsx/crud-typeorm @nestjs/typeorm typeorm
+```
+
+```bash yarn
+yarn add @nestjsx/crud-typeorm @nestjs/typeorm typeorm
+```
+
+```bash pnpm
+pnpm add @nestjsx/crud-typeorm @nestjs/typeorm typeorm
+```
+
+</CodeGroup>
+
+<Note>
+  You'll also need to install the core `@nestjsx/crud` package if you haven't already. See the [CRUD installation guide](/packages/crud/installation).
+</Note>
+
+## Required Dependencies
+
+### TypeORM Dependencies
+
+The package requires:
+
+- **@nestjs/typeorm** - NestJS integration for TypeORM
+- **typeorm** - The TypeORM library itself
+
+### Database Driver
+
+You'll also need to install a database driver for your chosen database:
+
+<CodeGroup>
+
+```bash PostgreSQL
+npm install pg
+```
+
+```bash MySQL
+npm install mysql2
+```
+
+```bash SQLite
+npm install sqlite3
+```
+
+```bash MSSQL
+npm install mssql
+```
+
+```bash MongoDB
+npm install mongodb
+```
+
+</CodeGroup>
+
+## TypeORM Setup
+
+Before using the CRUD package, configure TypeORM in your application:
+
+### 1. Configure TypeORM Module
+
+```typescript
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+@Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'user',
+      password: 'password',
+      database: 'mydb',
+      entities: [__dirname + '/**/*.entity{.ts,.js}'],
+      synchronize: true, // Don't use in production!
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### 2. Create an Entity
+
+```typescript
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @Column()
+  email: string;
+}
+```
+
+### 3. Create a Service
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { User } from './user.entity';
+
+@Injectable()
+export class UserService extends TypeOrmCrudService<User> {
+  constructor(@InjectRepository(User) repo) {
+    super(repo);
+  }
+}
+```
+
+### 4. Create a Controller
+
+```typescript
+import { Controller } from '@nestjs/common';
+import { Crud } from '@nestjsx/crud';
+import { User } from './user.entity';
+import { UserService } from './user.service';
+
+@Crud({
+  model: {
+    type: User,
+  },
+})
+@Controller('users')
+export class UserController {
+  constructor(public service: UserService) {}
+}
+```
+
+### 5. Register in Module
+
+```typescript
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from './user.entity';
+import { UserService } from './user.service';
+import { UserController } from './user.controller';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([User])],
+  providers: [UserService],
+  controllers: [UserController],
+})
+export class UserModule {}
+```
+
+## Verification
+
+To verify the installation:
+
+1. Start your application
+2. The TypeORM connection should be established
+3. Your CRUD endpoints should be available
+
+You can test with a simple GET request:
+
+```bash
+curl http://localhost:3000/users
+```
+
+## Advanced Configuration
+
+### Custom Repository
+
+You can use custom TypeORM repositories:
+
+```typescript
+import { EntityRepository, Repository } from 'typeorm';
+import { User } from './user.entity';
+
+@EntityRepository(User)
+export class UserRepository extends Repository<User> {
+  // Custom methods
+}
+```
+
+Then inject it into your service:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
+import { User } from './user.entity';
+import { UserRepository } from './user.repository';
+
+@Injectable()
+export class UserService extends TypeOrmCrudService<User> {
+  constructor(@InjectRepository(User) repo: UserRepository) {
+    super(repo);
+  }
+}
+```
+
+### Soft Deletes
+
+Enable soft deletes on your entity:
+
+```typescript
+import { Entity, PrimaryGeneratedColumn, Column, DeleteDateColumn } from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  name: string;
+
+  @DeleteDateColumn()
+  deletedAt?: Date;
+}
+```
+
+The CRUD service will automatically handle soft deletes.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Request Package" icon="arrows-left-right" href="/packages/crud-request/overview">
+    Learn about request query building
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build a complete CRUD API
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Connection Issues
+
+If you're having trouble connecting to the database:
+
+- Verify your database credentials
+- Ensure the database server is running
+- Check firewall settings
+- Verify the database driver is installed
+
+### Entity Not Found
+
+If TypeORM can't find your entities:
+
+- Check the `entities` path in TypeORM configuration
+- Ensure entities are exported properly
+- Verify the file naming convention matches the pattern

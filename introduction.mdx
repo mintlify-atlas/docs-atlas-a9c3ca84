@@ -1,0 +1,170 @@
+---
+title: Introduction
+description: Build powerful RESTful APIs in minutes with NestJS CRUD - a framework for automatic CRUD endpoint generation with advanced querying, filtering, and pagination.
+---
+
+<Info>
+  NestJS CRUD is a microframework for building RESTful services with automatic CRUD endpoint generation, advanced query parsing, and TypeORM integration.
+</Info>
+
+## Why NestJS CRUD?
+
+Building CRUD endpoints for every entity in your application is repetitive and time-consuming. NestJS CRUD eliminates this boilerplate by automatically generating fully-featured REST endpoints with a single decorator.
+
+```typescript
+@Crud({
+  model: { type: Company }
+})
+@Controller('companies')
+export class CompaniesController {
+  constructor(public service: CompaniesService) {}
+}
+```
+
+With just this code, you get all standard CRUD endpoints automatically generated.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Zero boilerplate" icon="code">
+    Generate complete CRUD APIs with a single `@Crud()` decorator. No need to write repetitive endpoint handlers.
+  </Card>
+  
+  <Card title="Advanced querying" icon="filter">
+    Built-in support for filtering, pagination, sorting, relations, nested relations, and field selection through query parameters.
+  </Card>
+  
+  <Card title="TypeORM integration" icon="database">
+    Seamless integration with TypeORM. Extend `TypeOrmCrudService` and get instant database operations.
+  </Card>
+  
+  <Card title="Type-safe validation" icon="shield-check">
+    Automatic request validation using class-validator and class-transformer decorators on your entities.
+  </Card>
+  
+  <Card title="Swagger documentation" icon="book">
+    Auto-generated OpenAPI documentation for all CRUD endpoints. Works seamlessly with `@nestjs/swagger`.
+  </Card>
+  
+  <Card title="Highly customizable" icon="wrench">
+    Override individual endpoints, customize query behavior, configure route options, and add authentication per route.
+  </Card>
+</CardGroup>
+
+## What you get automatically
+
+When you apply the `@Crud()` decorator to a controller, you automatically get these endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Get many entities with filtering, pagination, sorting |
+| `/:id` | GET | Get a single entity by ID |
+| `/` | POST | Create a new entity |
+| `/:id` | PATCH | Update an existing entity |
+| `/:id` | PUT | Replace an existing entity |
+| `/:id` | DELETE | Delete an entity |
+
+## Query capabilities
+
+Every GET endpoint comes with powerful query parsing out of the box:
+
+<CodeGroup>
+```bash Filtering
+# Filter companies by name
+GET /companies?filter=name||$cont||Tech
+
+# Multiple filters
+GET /companies?filter=name||$cont||Tech&filter=domain||$ends||.com
+```
+
+```bash Pagination
+# Get 10 companies per page
+GET /companies?limit=10&page=1
+
+# Using offset
+GET /companies?limit=10&offset=20
+```
+
+```bash Sorting
+# Sort by name ascending
+GET /companies?sort=name,ASC
+
+# Multiple sort fields
+GET /companies?sort=name,ASC&sort=createdAt,DESC
+```
+
+```bash Relations
+# Include related users
+GET /companies?join=users
+
+# Include users with specific fields
+GET /companies?join=users||id,email,name
+
+# Nested relations
+GET /companies?join=users&join=users.projects
+```
+
+```bash Field selection
+# Select specific fields
+GET /companies?fields=id,name,domain
+
+# Combine with relations
+GET /companies?fields=name&join=users||email
+```
+</CodeGroup>
+
+## Packages
+
+The NestJS CRUD ecosystem consists of three main packages:
+
+### @nestjsx/crud
+
+The core package providing the `@Crud()` decorator, route generation, validation, and helper decorators.
+
+```bash
+npm install @nestjsx/crud class-transformer class-validator
+```
+
+### @nestjsx/crud-typeorm
+
+TypeORM integration providing `TypeOrmCrudService` with ready-to-use database operations.
+
+```bash
+npm install @nestjsx/crud-typeorm @nestjs/typeorm typeorm
+```
+
+### @nestjsx/crud-request
+
+Request builder/parser for frontend applications. Build type-safe API queries in your client code.
+
+```bash
+npm install @nestjsx/crud-request
+```
+
+<Tip>
+  Start with the [Installation](/installation) guide to set up NestJS CRUD in your project, then follow the [Quickstart](/quickstart) to build your first CRUD API.
+</Tip>
+
+## Database support
+
+Through TypeORM integration, NestJS CRUD supports:
+
+- PostgreSQL
+- MySQL / MariaDB
+- SQLite
+- Microsoft SQL Server
+- Oracle
+- CockroachDB
+- And all other TypeORM-supported databases
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install and configure NestJS CRUD in your project
+  </Card>
+  
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first CRUD API in minutes
+  </Card>
+</CardGroup>
